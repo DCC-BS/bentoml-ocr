@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
-import os
 import time
 import uuid
 from typing import Any, cast
@@ -41,11 +40,11 @@ def validate_image_data_uri(data_uri: str) -> None:
         raw_b64 = data_uri.split(";base64,", 1)[1]
         image_bytes = base64.b64decode(raw_b64)
         Image.open(io.BytesIO(image_bytes)).verify()
-    except Exception:
+    except Exception as exc:
         raise HTTPException(
             status_code=422,
             detail="The provided image data is corrupted or not a valid image.",
-        )
+        ) from exc
 
 
 def extract_image_data_uri(messages: list[ChatMessage]) -> str:
@@ -149,14 +148,6 @@ class DefaultOCRBackend:
             from glmocr import GlmOcr
         except Exception as exc:  # pragma: no cover - import is environment-dependent
             raise RuntimeError("glmocr package is not available. Install dependencies with `uv sync`.") from exc
-
-        # The GlmOcr constructor kwargs (api_url, model, api_key) only feed the
-        # MaaS config path.  In selfhosted mode the SDK reads connection settings
-        # from GLMOCR_OCR_* env vars → pipeline.ocr_api.*, so we bridge them here.
-        os.environ["GLMOCR_OCR_API_URL"] = config.vllm_api_url
-        os.environ["GLMOCR_OCR_MODEL"] = config.vllm_model_name
-        if config.vllm_api_key:
-            os.environ["GLMOCR_OCR_API_KEY"] = config.vllm_api_key
 
         kwargs: dict[str, Any] = {
             "mode": "selfhosted",

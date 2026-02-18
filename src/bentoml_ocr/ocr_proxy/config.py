@@ -19,13 +19,26 @@ class AppConfig(AbstractAppConfig):
     log_level: str = Field(default="INFO", description="Logging level")
     config_path: str | None = Field(default=None, description="Optional path to GLM-OCR config file")
 
+    def apply_env(self) -> None:
+        """Write required ``GLMOCR_OCR_*`` env vars derived from this config.
+
+        The GlmOcr SDK in *selfhosted* mode reads connection settings from
+        ``GLMOCR_OCR_API_URL``, ``GLMOCR_OCR_MODEL``, and optionally
+        ``GLMOCR_OCR_API_KEY``.  These must be present **before** the parser
+        is instantiated; missing values cause a startup exception.
+        """
+        os.environ["GLMOCR_OCR_API_URL"] = self.vllm_api_url
+        os.environ["GLMOCR_OCR_MODEL"] = self.vllm_model_name
+        if self.vllm_api_key:
+            os.environ["GLMOCR_OCR_API_KEY"] = self.vllm_api_key
+
     @classmethod
     @override
     def from_env(cls) -> AppConfig:
         """Load configuration from environment variables."""
         enable_layout_raw = os.getenv("GLMOCR_ENABLE_LAYOUT", "true").lower()
 
-        return cls(
+        config = cls(
             vllm_api_url=get_env_or_throw("VLLM_API_URL"),
             vllm_api_key=os.getenv("VLLM_API_KEY"),
             vllm_model_name=get_env_or_throw("VLLM_MODEL_NAME"),
@@ -35,6 +48,8 @@ class AppConfig(AbstractAppConfig):
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             config_path=os.getenv("GLMOCR_CONFIG_PATH"),
         )
+        config.apply_env()
+        return config
 
     @override
     def __str__(self) -> str:

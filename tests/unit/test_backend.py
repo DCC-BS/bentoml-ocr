@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import io
-import os
 import sys
 import types
 from dataclasses import dataclass
@@ -19,6 +18,7 @@ from pytest import MonkeyPatch
 
 from bentoml_ocr.ocr_proxy.backend import (
     DefaultOCRBackend,
+    build_openai_response,
     extract_image_data_uri,
     extract_markdown_from_glmocr_result,
     extract_text_prompt,
@@ -26,6 +26,7 @@ from bentoml_ocr.ocr_proxy.backend import (
     validate_image_data_uri,
 )
 from bentoml_ocr.ocr_proxy.config import AppConfig
+from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME
 from bentoml_ocr.ocr_proxy.models import (
     ChatCompletionRequest,
     ChatMessage,
@@ -149,6 +150,44 @@ class TestExtractImageDataUri:
         messages = [_image_message(uri)]
         assert extract_image_data_uri(messages) == uri
 
+    def test_raises_400_when_no_image_parts(self) -> None:
+        messages = [ChatMessage(role="user", content=[ContentTextPart(type="text", text="no image")])]
+        with pytest.raises(HTTPException) as exc_info:
+            extract_image_data_uri(messages)
+        assert exc_info.value.status_code == 400
+
+    def test_raises_400_for_http_url_not_base64(self) -> None:
+        messages = [_image_message("https://example.com/image.png")]
+        with pytest.raises(HTTPException) as exc_info:
+            extract_image_data_uri(messages)
+        assert exc_info.value.status_code == 400
+
+    def test_returns_first_image_when_multiple_present(self) -> None:
+        b64a, b64b = _valid_image_b64(), _valid_image_b64()
+        msgs = [
+            ChatMessage(
+                role="user",
+                content=[
+                    ContentImagePart(type="image_url", image_url=ImageUrl(url=f"data:image/png;base64,{b64a}")),
+                    ContentImagePart(type="image_url", image_url=ImageUrl(url=f"data:image/png;base64,{b64b}")),
+                ],
+            )
+        ]
+        result = extract_image_data_uri(msgs)
+        assert b64a in result
+
+    def test_valid_base64_non_image_raises_422(self) -> None:
+        b64_text = base64.b64encode(b"this is plain text, not an image").decode()
+        with pytest.raises(HTTPException) as exc_info:
+            extract_image_data_uri([_image_message(b64_text)])
+        assert exc_info.value.status_code == 422
+
+    def test_raises_400_for_string_content_message(self) -> None:
+        messages = [ChatMessage(role="user", content="just text")]
+        with pytest.raises(HTTPException) as exc_info:
+            extract_image_data_uri(messages)
+        assert exc_info.value.status_code == 400
+
 
 # ---------------------------------------------------------------------------
 # validate_image_data_uri
@@ -166,6 +205,17 @@ class TestValidateImageDataUri:
             validate_image_data_uri(f"data:image/png;base64,{garbage_b64}")
         assert exc_info.value.status_code == 422
         assert "corrupted" in exc_info.value.detail.lower() or "not a valid image" in exc_info.value.detail.lower()
+
+    def test_data_uri_without_base64_marker_raises_422(self) -> None:
+        with pytest.raises(HTTPException) as exc_info:
+            validate_image_data_uri("data:image/png,notbase64")
+        assert exc_info.value.status_code == 422
+
+    def test_jpeg_image_passes(self) -> None:
+        buf = io.BytesIO()
+        Image.new("RGB", (4, 4)).save(buf, format="JPEG")
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        validate_image_data_uri(f"data:image/jpeg;base64,{b64}")
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +240,27 @@ class TestExtractTextPrompt:
         assert "You are helpful." in result
         assert "OCR this" in result
 
+    def test_empty_messages_returns_empty_string(self) -> None:
+        assert extract_text_prompt([]) == ""
+
+    def test_all_image_parts_returns_empty_string(self) -> None:
+        b64 = _valid_image_b64()
+        messages = [
+            ChatMessage(
+                role="user",
+                content=[ContentImagePart(type="image_url", image_url=ImageUrl(url=f"data:image/png;base64,{b64}"))],
+            )
+        ]
+        assert extract_text_prompt(messages) == ""
+
+    def test_multiple_messages_joined_with_newline(self) -> None:
+        messages = [
+            ChatMessage(role="user", content="line one"),
+            ChatMessage(role="user", content="line two"),
+        ]
+        result = extract_text_prompt(messages)
+        assert result == "line one\nline two"
+
 
 # ---------------------------------------------------------------------------
 # extract_markdown_from_glmocr_result
@@ -212,12 +283,43 @@ class TestExtractMarkdownFromGlmOcrResult:
 
 
 # ---------------------------------------------------------------------------
+# build_openai_response
+# ---------------------------------------------------------------------------
+
+
+class TestBuildOpenaiResponse:
+    def test_response_has_all_required_fields(self) -> None:
+        resp = build_openai_response("hello", "glm-ocr")
+        assert resp.object == "chat.completion"
+        assert resp.model == "glm-ocr"
+        assert resp.id.startswith("chatcmpl-")
+        assert resp.created > 0
+        assert len(resp.choices) == 1
+        assert resp.choices[0].finish_reason == "stop"
+        assert resp.choices[0].index == 0
+
+    def test_completion_tokens_estimated_from_content_length(self) -> None:
+        content = "a" * 400
+        resp = build_openai_response(content, "glm-ocr")
+        assert resp.usage.completion_tokens == 100
+
+    def test_model_name_echoed_in_response(self) -> None:
+        resp = build_openai_response("text", "my-custom-model")
+        assert resp.model == "my-custom-model"
+
+    def test_empty_content_does_not_raise(self) -> None:
+        resp = build_openai_response("", "glm-ocr")
+        assert resp.choices[0].message.content == ""
+        assert resp.usage.completion_tokens >= 1
+
+
+# ---------------------------------------------------------------------------
 # _init_glmocr_parser
 # ---------------------------------------------------------------------------
 
 
 class TestInitGlmOcrParser:
-    def test_sets_env_vars_and_constructor_kwargs(self, monkeypatch: MonkeyPatch) -> None:
+    def test_constructor_kwargs_with_config_path(self, monkeypatch: MonkeyPatch) -> None:
         class SpyGlmOcr:
             def __init__(self, **kwargs: Any) -> None:
                 self.kwargs = kwargs
@@ -229,16 +331,12 @@ class TestInitGlmOcrParser:
         config = _test_config(config_path="/etc/glmocr.yaml", vllm_api_key="secret")
         parser = DefaultOCRBackend._init_glmocr_parser(config)
 
-        assert os.environ["GLMOCR_OCR_API_URL"] == "http://vllm.local/v1/chat/completions"
-        assert os.environ["GLMOCR_OCR_MODEL"] == "glm-ocr"
-        assert os.environ["GLMOCR_OCR_API_KEY"] == "secret"
-
         assert parser.kwargs["config_path"] == "/etc/glmocr.yaml"
         assert parser.kwargs["mode"] == "selfhosted"
         assert "api_url" not in parser.kwargs
         assert "model" not in parser.kwargs
 
-    def test_skips_api_key_env_when_none(self, monkeypatch: MonkeyPatch) -> None:
+    def test_omits_config_path_when_none(self, monkeypatch: MonkeyPatch) -> None:
         class SpyGlmOcr:
             def __init__(self, **kwargs: Any) -> None:
                 self.kwargs = kwargs
@@ -246,13 +344,10 @@ class TestInitGlmOcrParser:
         fake_module = types.ModuleType("glmocr")
         fake_module.GlmOcr = SpyGlmOcr  # type: ignore[attr-defined]
         monkeypatch.setitem(sys.modules, "glmocr", fake_module)
-        monkeypatch.delenv("GLMOCR_OCR_API_KEY", raising=False)
 
         config = _test_config(config_path=None, vllm_api_key=None)
         parser = DefaultOCRBackend._init_glmocr_parser(config)
 
-        assert os.environ["GLMOCR_OCR_API_URL"] == "http://vllm.local/v1/chat/completions"
-        assert "GLMOCR_OCR_API_KEY" not in os.environ
         assert "config_path" not in parser.kwargs
 
 
@@ -295,6 +390,33 @@ class TestProcessFull:
         assert response.choices[0].message.content == "No OCR content produced by GLM-OCR."
         await backend.close()
 
+    @pytest.mark.asyncio
+    async def test_parser_receives_save_layout_false_kwarg(self, monkeypatch: MonkeyPatch) -> None:
+        backend = _make_backend(monkeypatch)
+        parser: _FakeGlmOcrParser = backend._parser  # type: ignore[assignment]
+        captured_kwargs: list[dict[str, Any]] = []
+        original_parse = parser.parse
+
+        def spy(uri: str, **kwargs: Any) -> _FakeParseItem:
+            captured_kwargs.append(kwargs)
+            return original_parse(uri, **kwargs)
+
+        parser.parse = spy  # type: ignore[assignment]
+        await backend.process_full(_sample_request(_VALID_B64))
+        assert captured_kwargs[0].get("save_layout_visualization") is False
+        await backend.close()
+
+    @pytest.mark.asyncio
+    async def test_response_model_is_always_full_model_name(self, monkeypatch: MonkeyPatch) -> None:
+        backend = _make_backend(monkeypatch)
+        parser: _FakeGlmOcrParser = backend._parser  # type: ignore[assignment]
+        parser.parse = lambda _uri, **kw: _FakeParseItem(markdown_result="result")  # type: ignore[assignment]
+
+        request = _sample_request(_VALID_B64, model="glm-ocr-raw")
+        response = await backend.process_full(request)
+        assert response.model == FULL_MODEL_NAME
+        await backend.close()
+
 
 # ---------------------------------------------------------------------------
 # process_raw
@@ -322,8 +444,6 @@ class TestProcessRaw:
     async def test_generic_http_error_returns_502(self, monkeypatch: MonkeyPatch) -> None:
         backend = _make_backend(monkeypatch)
 
-        from fastapi import HTTPException
-
         with respx.mock() as mocked:
             mocked.post("http://vllm.local/v1/chat/completions").mock(
                 side_effect=httpx.ConnectError("connection refused")
@@ -336,6 +456,80 @@ class TestProcessRaw:
             assert exc_info.value.status_code == 502
 
         await backend.close()
+
+    @pytest.mark.asyncio
+    async def test_4xx_vllm_response_propagates_status_code(self, monkeypatch: MonkeyPatch) -> None:
+        backend = _make_backend(monkeypatch)
+
+        with respx.mock() as mocked:
+            mocked.post("http://vllm.local/v1/chat/completions").respond(401, text="unauthorized")
+            with pytest.raises(HTTPException) as exc_info:
+                await backend.process_raw(_sample_request(_VALID_B64, model="glm-ocr-raw"))
+            assert exc_info.value.status_code == 401
+
+        await backend.close()
+
+    @pytest.mark.asyncio
+    async def test_payload_forwards_temperature_and_max_tokens(self, monkeypatch: MonkeyPatch) -> None:
+        backend = _make_backend(monkeypatch)
+        captured: list[dict[str, Any]] = []
+
+        with respx.mock() as mocked:
+
+            def capture(request: httpx.Request) -> respx.MockResponse:
+                import json
+
+                captured.append(json.loads(request.content))
+                return respx.MockResponse(200, json={"choices": []})
+
+            mocked.post("http://vllm.local/v1/chat/completions").mock(side_effect=capture)
+            req = ChatCompletionRequest(
+                model="glm-ocr-raw",
+                messages=[ChatMessage(role="user", content="test")],
+                temperature=0.7,
+                max_tokens=512,
+            )
+            await backend.process_raw(req)
+
+        assert captured[0]["temperature"] == 0.7
+        assert captured[0]["max_tokens"] == 512
+        await backend.close()
+
+    @pytest.mark.asyncio
+    async def test_none_values_excluded_from_payload(self, monkeypatch: MonkeyPatch) -> None:
+        backend = _make_backend(monkeypatch)
+        captured: list[dict[str, Any]] = []
+
+        with respx.mock() as mocked:
+
+            def capture(request: httpx.Request) -> respx.MockResponse:
+                import json
+
+                captured.append(json.loads(request.content))
+                return respx.MockResponse(200, json={"choices": []})
+
+            mocked.post("http://vllm.local/v1/chat/completions").mock(side_effect=capture)
+            req = ChatCompletionRequest(model="glm-ocr-raw", messages=[ChatMessage(role="user", content="t")])
+            await backend.process_raw(req)
+
+        assert "temperature" not in captured[0]
+        assert "max_tokens" not in captured[0]
+        await backend.close()
+
+
+# ---------------------------------------------------------------------------
+# DefaultOCRBackend.__init__
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultOCRBackendInit:
+    def test_auth_header_set_when_api_key_provided(self, monkeypatch: MonkeyPatch) -> None:
+        backend = _make_backend(monkeypatch, vllm_api_key="my-secret")
+        assert backend._raw_http.headers.get("authorization") == "Bearer my-secret"
+
+    def test_no_auth_header_when_api_key_is_none(self, monkeypatch: MonkeyPatch) -> None:
+        backend = _make_backend(monkeypatch, vllm_api_key=None)
+        assert "authorization" not in backend._raw_http.headers
 
 
 # ---------------------------------------------------------------------------
@@ -356,3 +550,14 @@ class TestClose:
         await backend.close()
         assert parser.closed is True
         assert parser.close_thread_id != main_thread_id
+
+    @pytest.mark.asyncio
+    async def test_close_without_parser_close_method_does_not_raise(self, monkeypatch: MonkeyPatch) -> None:
+        class _ParserWithoutClose:
+            def parse(self, _uri: str, **kwargs: Any) -> _FakeParseItem:
+                return _FakeParseItem(markdown_result="")
+
+        parser = _ParserWithoutClose()
+        monkeypatch.setattr(DefaultOCRBackend, "_init_glmocr_parser", staticmethod(lambda cfg: parser))
+        backend = DefaultOCRBackend(_test_config())
+        await backend.close()
