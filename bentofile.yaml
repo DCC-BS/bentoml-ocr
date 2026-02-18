@@ -1,0 +1,11 @@
+service: "service:GLMOCRProxy"
+description: "Docling-compatible OpenAI VLM proxy backed by GLM-OCR SDK."
+labels:
+  project: bentoml-ocr
+include:
+  - "service/**/*.py"
+  - "ocr_proxy/**/*.py"
+  - "config.yaml"
+  - "pyproject.toml"
+  - "README.md"
+  - "tests/**/*.py"

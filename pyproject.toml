@@ -1,0 +1,86 @@
+[project]
+name = "bentoml-ocr"
+version = "0.1.0"
+description = "BentoML GLM-OCR proxy API compatible with Docling VLM"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "bentoml>=1.4",
+  "fastapi>=0.115",
+  "httpx>=0.28",
+  "uvicorn>=0.34",
+  "pydantic>=2.10",
+  "pyyaml>=6.0.2",
+  "glmocr @ git+https://github.com/zai-org/GLM-OCR.git",
+]
+
+[dependency-groups]
+dev = [
+  "ty>=0.0.12",
+  "pytest>=8.0",
+  "pytest-asyncio>=0.25",
+  "pytest-cov>=6.0",
+  "respx>=0.22",
+  "ruff>=0.9",
+  "pre-commit>=2.20.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bentoml_ocr"]
+
+[tool.ruff]
+# Same as Black.
+line-length = 120
+indent-width = 4
+
+target-version = "py313"
+
+[tool.ruff.lint]
+# Add rules to enable
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+]
+
+# Ignore specific rules
+ignore = ["E501"]
+
+[tool.ruff.format]
+# Use double quotes for strings.
+quote-style = "double"
+
+# Indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Automatically detect the appropriate line ending.
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+# Group imports by type (standard library, third-party, first-party).
+combine-as-imports = true
+force-wrap-aliases = true
+
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--import-mode=importlib",
+]
+pythonpath = ["src"]
+markers = [
+  "e2e: end-to-end tests requiring external vLLM service",
+]
