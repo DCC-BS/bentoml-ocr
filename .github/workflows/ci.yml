@@ -43,6 +43,6 @@ jobs:
         run: uv run pytest tests/ -v --cov=. --cov-report=xml -m "not e2e"
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
