@@ -7,9 +7,10 @@ import uuid
 from typing import Any, cast
 
 import httpx
+from dcc_backend_common.logger import get_logger
 from fastapi import HTTPException
 
-from bentoml_ocr.ocr_proxy.config import RuntimeConfig
+from bentoml_ocr.ocr_proxy.config import AppConfig
 from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME
 from bentoml_ocr.ocr_proxy.models import (
     ChatChoice,
@@ -21,6 +22,8 @@ from bentoml_ocr.ocr_proxy.models import (
     ContentTextPart,
     ResponseMessage,
 )
+
+logger = get_logger(__name__)
 
 
 def extract_image_data_uri(messages: list[ChatMessage]) -> str:
@@ -85,13 +88,21 @@ def extract_markdown_from_glmocr_result(result: Any) -> str:
 
 
 class DefaultOCRBackend:
-    def __init__(self, config: RuntimeConfig):
+    def __init__(self, config: AppConfig):
         self._config = config
-        self._raw_http = httpx.AsyncClient(timeout=self._config.request_timeout_seconds)
+        headers = {"Authorization": f"Bearer {config.vllm_api_key}"} if config.vllm_api_key else {}
+        self._raw_http = httpx.AsyncClient(timeout=self._config.request_timeout_seconds, headers=headers)
         self._parser = self._init_glmocr_parser(config)
+        logger.info(
+            "OCR backend initialized",
+            vllm_url=config.vllm_api_url,
+            model=config.vllm_model_name,
+            enable_layout=config.enable_layout,
+            timeout_seconds=config.request_timeout_seconds,
+        )
 
     @staticmethod
-    def _init_glmocr_parser(config: RuntimeConfig) -> Any:
+    def _init_glmocr_parser(config: AppConfig) -> Any:
         try:
             from glmocr import GlmOcr
         except Exception as exc:  # pragma: no cover - import is environment-dependent
@@ -119,12 +130,25 @@ class DefaultOCRBackend:
                 "enable_layout": self._config.enable_layout,
                 "save_layout_visualization": False,
             }
+            if self._config.vllm_api_key:
+                kwargs["api_key"] = self._config.vllm_api_key
             return self._parser.parse(image_uri, **kwargs)
 
+        start = time.perf_counter()
         result = await asyncio.to_thread(_run_parse)
+        parse_ms = (time.perf_counter() - start) * 1000
+
         markdown = extract_markdown_from_glmocr_result(result)
         if not markdown:
+            logger.warning("GLM-OCR produced empty result", model=request.model)
             markdown = "No OCR content produced by GLM-OCR."
+
+        logger.info(
+            "GLM-OCR parse completed",
+            model=request.model,
+            parse_duration_ms=round(parse_ms, 2),
+            result_length=len(markdown),
+        )
         return build_openai_response(markdown, FULL_MODEL_NAME)
 
     async def process_raw(self, request: ChatCompletionRequest) -> dict[str, Any]:
@@ -134,10 +158,17 @@ class DefaultOCRBackend:
         try:
             response = await self._raw_http.post(self._config.vllm_api_url, json=payload)
         except httpx.TimeoutException as exc:
+            logger.error("vLLM request timed out", url=self._config.vllm_api_url)
             raise HTTPException(status_code=504, detail="Timed out calling external vLLM.") from exc
         except httpx.HTTPError as exc:
+            logger.error("vLLM request failed", url=self._config.vllm_api_url, error=str(exc))
             raise HTTPException(status_code=502, detail=f"vLLM request failed: {exc}") from exc
         if response.status_code >= 400:
+            logger.error(
+                "vLLM returned error status",
+                url=self._config.vllm_api_url,
+                status_code=response.status_code,
+            )
             raise HTTPException(status_code=response.status_code, detail=response.text)
         return cast(dict[str, Any], response.json())
 
@@ -146,3 +177,4 @@ class DefaultOCRBackend:
         parser_close = getattr(self._parser, "close", None)
         if callable(parser_close):
             await asyncio.to_thread(parser_close)
+        logger.info("OCR backend closed")

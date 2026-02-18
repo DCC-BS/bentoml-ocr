@@ -12,6 +12,7 @@ dependencies = [
   "pydantic>=2.10",
   "pyyaml>=6.0.2",
   "glmocr @ git+https://github.com/zai-org/GLM-OCR.git",
+  "dcc-backend-common>=0.1.4",
 ]
 
 [project.optional-dependencies]
@@ -83,4 +84,8 @@ addopts = [
 pythonpath = ["src"]
 markers = [
   "e2e: end-to-end tests requiring external vLLM service",
+]
+filterwarnings = [
+  "ignore::DeprecationWarning:pathspec",
+  "ignore::DeprecationWarning:_bentoml_sdk",
 ]

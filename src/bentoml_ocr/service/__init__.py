@@ -1,10 +1,13 @@
 import bentoml
+from dcc_backend_common.logger import get_logger, init_logger
 
 from bentoml_ocr.ocr_proxy.api import app, set_backend_for_tests
 from bentoml_ocr.ocr_proxy.backend import DefaultOCRBackend, build_openai_response
-from bentoml_ocr.ocr_proxy.config import load_runtime_config
+from bentoml_ocr.ocr_proxy.config import AppConfig
 
 _build_openai_response = build_openai_response
+
+logger = get_logger(__name__)
 
 image = (
     bentoml.images.Image(python_version="3.12")
@@ -30,4 +33,7 @@ class GLMOCRProxy:
     layout_model = bentoml.models.HuggingFaceModel("PaddlePaddle/PP-DocLayoutV3_safetensors")
 
     def __init__(self) -> None:
-        set_backend_for_tests(DefaultOCRBackend(load_runtime_config()))
+        init_logger()
+        config = AppConfig.from_env()
+        logger.info("Service initialized", config=str(config))
+        set_backend_for_tests(DefaultOCRBackend(config))

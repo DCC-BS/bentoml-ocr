@@ -10,7 +10,7 @@ from pytest import MonkeyPatch
 
 from bentoml_ocr import service
 from bentoml_ocr.ocr_proxy.backend import DefaultOCRBackend
-from bentoml_ocr.ocr_proxy.config import RuntimeConfig
+from bentoml_ocr.ocr_proxy.config import AppConfig
 
 
 @dataclass
@@ -23,8 +23,8 @@ class FakeGlmOcrParser:
         return FakePipelineResult(markdown_result="## Parsed\n\ncontent")
 
 
-def _test_config() -> RuntimeConfig:
-    return RuntimeConfig(
+def _test_config() -> AppConfig:
+    return AppConfig(
         vllm_api_url="http://vllm.local/v1/chat/completions",
         vllm_model_name="glm-ocr",
         request_timeout_seconds=10,
