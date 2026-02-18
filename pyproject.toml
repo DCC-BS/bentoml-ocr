@@ -14,7 +14,7 @@ dependencies = [
   "glmocr @ git+https://github.com/zai-org/GLM-OCR.git",
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
   "ty>=0.0.12",
   "pytest>=8.0",
