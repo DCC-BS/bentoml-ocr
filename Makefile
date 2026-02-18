@@ -22,7 +22,12 @@ test: ## Test the code with pytest
 .PHONY: test-e2e
 test-e2e: ## Run end-to-end tests requiring external vLLM service
 	@echo "🚀 Running e2e tests"
-	@uv run python -m pytest tests/integration/test_e2e.py -m e2e
+	@uv run python -m pytest tests/integration/test_e2e.py -m "e2e and not load"
+
+.PHONY: test-load
+test-load: ## Run load test (40 concurrent requests, 5 min) against live service
+	@echo "🚀 Running load test"
+	@uv run python -m pytest tests/integration/test_e2e.py -m load -s
 
 .PHONY: test-cov
 test-cov: ## Run all tests with code coverage

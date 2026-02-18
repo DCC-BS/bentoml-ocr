@@ -14,9 +14,10 @@ from bentoml_ocr.ocr_proxy import api
 @pytest.fixture
 def _enable_body_size_limit() -> Generator[None, None, None]:
     """Temporarily enable body size limit on the shared app."""
+    original_max = api.app.state.max_body_size_bytes
     api.app.state.max_body_size_bytes = 1024
     yield
-    api.app.state.max_body_size_bytes = 50 * 1024 * 1024
+    api.app.state.max_body_size_bytes = original_max
 
 
 @pytest_asyncio.fixture
@@ -42,6 +43,16 @@ class TestBodySizeLimitMiddleware:
         )
         assert response.status_code == 413
         assert "too large" in response.text.lower()
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_content_length(self, client: httpx.AsyncClient) -> None:
+        response = await client.post(
+            "/v1/chat/completions",
+            content=b"hi",
+            headers={"Content-Length": "not-a-number", "Content-Type": "application/json"},
+        )
+        assert response.status_code == 400
+        assert "invalid content-length" in response.text.lower()
 
 
 # ---------------------------------------------------------------------------

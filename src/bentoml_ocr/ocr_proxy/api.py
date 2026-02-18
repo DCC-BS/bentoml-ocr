@@ -48,11 +48,19 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         max_bytes: int = request.app.state.max_body_size_bytes
         content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > max_bytes:
-            return JSONResponse(
-                status_code=413,
-                content={"detail": f"Request body too large. Maximum allowed size is {max_bytes} bytes."},
-            )
+        if content_length:
+            try:
+                length = int(content_length)
+            except ValueError:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "Invalid Content-Length header."},
+                )
+            if length > max_bytes:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"Request body too large. Maximum allowed size is {max_bytes} bytes."},
+                )
         return await call_next(request)
 
 
@@ -85,7 +93,11 @@ async def healthz() -> dict[str, str]:
 async def readyz(
     backend: OCRBackend = Depends(Provide[Container.backend]),  # noqa: B008
 ) -> dict[str, str]:
-    """Readiness check that verifies the vLLM backend is reachable."""
+    """Readiness check: confirms the DI container can resolve the backend.
+
+    This does NOT perform a live health-check against the vLLM server;
+    it only verifies that the backend singleton was constructed successfully.
+    """
     _ = backend
     return {"status": "ok"}
 

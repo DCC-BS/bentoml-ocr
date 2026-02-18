@@ -28,6 +28,7 @@ class TestAppConfigApplyEnv:
     def test_sets_api_url_and_model(self, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.delenv("GLMOCR_OCR_API_URL", raising=False)
         monkeypatch.delenv("GLMOCR_OCR_MODEL", raising=False)
+        monkeypatch.delenv("GLMOCR_OCR_API_KEY", raising=False)
 
         cfg = _test_config(vllm_api_url="http://vllm/v1", vllm_model_name="my-model")
         cfg.apply_env()

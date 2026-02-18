@@ -2,7 +2,6 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: glm-ocr-proxy
-  namespace: bentoml-ocr
   labels:
     app.kubernetes.io/name: glm-ocr-proxy
     app.kubernetes.io/part-of: bentoml-ocr
@@ -13,6 +12,9 @@ spec:
     name: glm-ocr-proxy
   minReplicas: 2
   maxReplicas: 10
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
   metrics:
     - type: Resource
       resource:

@@ -34,7 +34,7 @@ def _test_config() -> AppConfig:
 
 
 def _make_backend(monkeypatch: MonkeyPatch) -> DefaultOCRBackend:
-    monkeypatch.setattr(DefaultOCRBackend, "_init_glmocr_parser", lambda self, config: FakeGlmOcrParser())
+    monkeypatch.setattr(DefaultOCRBackend, "_init_glmocr_parser", staticmethod(lambda cfg: FakeGlmOcrParser()))
     return DefaultOCRBackend(_test_config())
 
 

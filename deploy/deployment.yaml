@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: glm-ocr-proxy
-  namespace: bentoml-ocr
   labels:
     app.kubernetes.io/name: glm-ocr-proxy
     app.kubernetes.io/part-of: bentoml-ocr
@@ -17,13 +16,22 @@ spec:
       labels:
         app.kubernetes.io/name: glm-ocr-proxy
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: glm-ocr-proxy
+                topologyKey: kubernetes.io/hostname
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
         - name: proxy
-          image: ghcr.io/dcc-bs/bentoml-ocr:latest  # replace OWNER and pin to a release tag
+          image: ghcr.io/dcc-bs/bentoml-ocr:v0.0.0  # pin to a release tag produced by CD
           ports:
             - name: http
               containerPort: 3000
@@ -41,11 +49,16 @@ spec:
             limits:
               cpu: "2"
               memory: 2Gi
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
           livenessProbe:
             httpGet:
               path: /healthz
               port: http
-            initialDelaySeconds: 10
             periodSeconds: 15
             failureThreshold: 3
           readinessProbe:

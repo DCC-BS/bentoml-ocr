@@ -2,7 +2,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: glm-ocr-proxy
-  namespace: bentoml-ocr
   labels:
     app.kubernetes.io/name: glm-ocr-proxy
     app.kubernetes.io/part-of: bentoml-ocr
@@ -14,7 +13,11 @@ spec:
     - Ingress
     - Egress
   ingress:
-    - ports:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
         - port: http
           protocol: TCP
   egress:

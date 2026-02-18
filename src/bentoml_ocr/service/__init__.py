@@ -35,9 +35,13 @@ _container: Container | None = None
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
     if _container is not None:
-        backend = _container.backend()
-        await backend.close()
-        logger.info("Service shutdown complete")
+        try:
+            backend = _container.backend()
+            await backend.close()
+        except Exception:
+            logger.warning("Backend was not initialised; skipping close")
+        else:
+            logger.info("Service shutdown complete")
 
 
 app.router.lifespan_context = _lifespan

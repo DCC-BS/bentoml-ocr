@@ -87,6 +87,7 @@ addopts = [
 pythonpath = ["src"]
 markers = [
   "e2e: end-to-end tests requiring external vLLM service",
+  "load: load tests (long-running, requires external service)",
 ]
 filterwarnings = [
   "ignore::DeprecationWarning:pathspec",
