@@ -276,15 +276,15 @@ class TestProcessRaw:
     async def test_generic_http_error_returns_502(self, monkeypatch: MonkeyPatch) -> None:
         backend = _make_backend(monkeypatch)
 
+        from fastapi import HTTPException
+
         with respx.mock() as mocked:
             mocked.post("http://vllm.local/v1/chat/completions").mock(
                 side_effect=httpx.ConnectError("connection refused")
             )
             request = _sample_request(_VALID_B64, model="glm-ocr-raw")
-            with pytest.raises(httpx.HTTPStatusError if False else Exception) as exc_info:
+            with pytest.raises(HTTPException) as exc_info:
                 await backend.process_raw(request)
-
-            from fastapi import HTTPException
 
             assert isinstance(exc_info.value, HTTPException)
             assert exc_info.value.status_code == 502
