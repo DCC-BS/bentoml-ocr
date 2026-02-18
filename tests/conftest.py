@@ -21,27 +21,13 @@ class FakeBackend:
 
     def __init__(self) -> None:
         self.full_calls = 0
-        self.raw_calls = 0
         self.last_request: ChatCompletionRequest | None = None
-        self.raw_response: dict[str, Any] = {
-            "id": "chatcmpl-raw",
-            "object": "chat.completion",
-            "created": 0,
-            "model": "glm-ocr-raw",
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": "raw ok"}}],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-        }
 
     async def process_full(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
         extract_image_data_uri(request.messages)
         self.full_calls += 1
         self.last_request = request
         return build_openai_response("# OCR\n\nhello world", request.model)
-
-    async def process_raw(self, request: ChatCompletionRequest) -> dict[str, Any]:
-        self.raw_calls += 1
-        self.last_request = request
-        return self.raw_response
 
     async def close(self) -> None:
         return None

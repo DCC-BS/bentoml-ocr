@@ -1,4 +1,4 @@
-"""OCR backend implementation using GLM-OCR SDK and vLLM passthrough."""
+"""OCR backend implementation using GLM-OCR SDK."""
 
 from __future__ import annotations
 
@@ -11,15 +11,13 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
-import httpx
 from dcc_backend_common.logger import get_logger
 from fastapi import HTTPException
 from PIL import Image
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from bentoml_ocr.ocr_proxy.config import AppConfig
-from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME
 from bentoml_ocr.ocr_proxy.models import (
+    MODEL_NAME,
     ChatChoice,
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -124,36 +122,16 @@ def extract_markdown_from_glmocr_result(result: Any) -> str:
     return markdown or ""
 
 
-_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
-
-
-def _is_retryable_httpx_error(exc: BaseException) -> bool:
-    if isinstance(exc, httpx.TimeoutException):
-        return True
-    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in _RETRYABLE_STATUS_CODES:
-        return True
-    return isinstance(exc, (httpx.ConnectError, httpx.RemoteProtocolError))
-
-
 class DefaultOCRBackend:
-    """OCR backend that delegates to the GLM-OCR SDK for full parsing and to vLLM for raw passthrough."""
+    """OCR backend that delegates to the GLM-OCR SDK for full parsing (layout + OCR)."""
 
     def __init__(self, config: AppConfig) -> None:
-        """Initialize the backend with an HTTP client for vLLM and a GLM-OCR parser.
+        """Initialize the backend with a GLM-OCR parser.
 
         Args:
             config: Application configuration containing vLLM and GLM-OCR settings.
         """
         self._config = config
-        headers = {"Authorization": f"Bearer {config.vllm_api_key}"} if config.vllm_api_key else {}
-        self._raw_http = httpx.AsyncClient(
-            timeout=self._config.request_timeout_seconds,
-            headers=headers,
-            limits=httpx.Limits(
-                max_connections=config.max_http_connections,
-                max_keepalive_connections=config.max_keepalive_connections,
-            ),
-        )
         self._executor = ThreadPoolExecutor(max_workers=config.max_workers)
         self._parser = self._init_glmocr_parser(config)
         logger.info(
@@ -163,7 +141,6 @@ class DefaultOCRBackend:
             enable_layout=config.enable_layout,
             timeout_seconds=config.request_timeout_seconds,
             max_workers=config.max_workers,
-            max_http_connections=config.max_http_connections,
         )
 
     @staticmethod
@@ -220,65 +197,10 @@ class DefaultOCRBackend:
             result_length=len(markdown),
             text_prompt=text_prompt or None,
         )
-        return build_openai_response(markdown, FULL_MODEL_NAME)
-
-    async def process_raw(self, request: ChatCompletionRequest) -> dict[str, Any]:
-        """Forward the request directly to vLLM and return the raw JSON response.
-
-        Args:
-            request: Chat completion request to pass through to vLLM.
-
-        Returns:
-            The raw JSON response from the vLLM server.
-
-        Raises:
-            HTTPException: On timeout, HTTP errors, or non-2xx vLLM responses.
-        """
-        payload = request.model_dump(exclude_none=True)
-        if not payload.get("model"):
-            payload["model"] = self._config.vllm_model_name
-        try:
-            response = await self._send_raw_request(payload)
-            response.raise_for_status()
-        except httpx.TimeoutException as exc:
-            logger.error("vLLM request timed out", url=self._config.vllm_api_url)
-            raise HTTPException(status_code=504, detail="Timed out calling external vLLM.") from exc
-        except httpx.HTTPStatusError as exc:
-            logger.error(
-                "vLLM returned error status",
-                url=self._config.vllm_api_url,
-                status_code=exc.response.status_code,
-                response_body=exc.response.text,
-            )
-            raise HTTPException(
-                status_code=exc.response.status_code,
-                detail=f"Upstream service returned {exc.response.status_code}.",
-            ) from exc
-        except httpx.HTTPError as exc:
-            logger.error("vLLM request failed", url=self._config.vllm_api_url, error=str(exc))
-            raise HTTPException(status_code=502, detail="Upstream service request failed.") from exc
-        return cast(dict[str, Any], response.json())
-
-    async def _send_raw_request(self, payload: dict[str, Any]) -> httpx.Response:
-        """Send a single HTTP request to vLLM with retry logic for transient failures."""
-
-        @retry(
-            stop=stop_after_attempt(self._config.retry_max_attempts),
-            wait=wait_exponential(
-                multiplier=self._config.retry_backoff_base_seconds,
-                max=self._config.retry_backoff_max_seconds,
-            ),
-            retry=retry_if_exception(_is_retryable_httpx_error),
-            reraise=True,
-        )
-        async def _do_request() -> httpx.Response:
-            return await self._raw_http.post(self._config.vllm_api_url, json=payload)
-
-        return await _do_request()
+        return build_openai_response(markdown, MODEL_NAME)
 
     async def close(self) -> None:
-        """Shut down the HTTP client, thread pool, and GLM-OCR parser."""
-        await self._raw_http.aclose()
+        """Shut down the thread pool and GLM-OCR parser."""
         self._executor.shutdown(wait=False)
         parser_close = getattr(self._parser, "close", None)
         if callable(parser_close):

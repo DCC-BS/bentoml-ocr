@@ -9,9 +9,7 @@ import types
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
 import pytest
-import respx
 from fastapi import HTTPException
 from PIL import Image
 from pytest import MonkeyPatch
@@ -26,8 +24,8 @@ from bentoml_ocr.ocr_proxy.backend import (
     validate_image_data_uri,
 )
 from bentoml_ocr.ocr_proxy.config import AppConfig
-from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME
 from bentoml_ocr.ocr_proxy.models import (
+    MODEL_NAME,
     ChatCompletionRequest,
     ChatMessage,
     ContentImagePart,
@@ -412,124 +410,10 @@ class TestProcessFull:
         parser: _FakeGlmOcrParser = backend._parser  # type: ignore[assignment]
         parser.parse = lambda _uri, **kw: _FakeParseItem(markdown_result="result")  # type: ignore[assignment]
 
-        request = _sample_request(_VALID_B64, model="glm-ocr-raw")
+        request = _sample_request(_VALID_B64)
         response = await backend.process_full(request)
-        assert response.model == FULL_MODEL_NAME
+        assert response.model == MODEL_NAME
         await backend.close()
-
-
-# ---------------------------------------------------------------------------
-# process_raw
-# ---------------------------------------------------------------------------
-
-
-class TestProcessRaw:
-    @pytest.mark.asyncio
-    async def test_missing_model_uses_config_default(self, monkeypatch: MonkeyPatch) -> None:
-        backend = _make_backend(monkeypatch)
-
-        with respx.mock(assert_all_called=True) as mocked:
-            route = mocked.post("http://vllm.local/v1/chat/completions").respond(200, json={"choices": []})
-            request = ChatCompletionRequest(
-                model="",
-                messages=[ChatMessage(role="user", content="test")],
-            )
-            result = await backend.process_raw(request)
-            assert route.called
-
-        assert isinstance(result, dict)
-        await backend.close()
-
-    @pytest.mark.asyncio
-    async def test_generic_http_error_returns_502(self, monkeypatch: MonkeyPatch) -> None:
-        backend = _make_backend(monkeypatch)
-
-        with respx.mock() as mocked:
-            mocked.post("http://vllm.local/v1/chat/completions").mock(
-                side_effect=httpx.ConnectError("connection refused")
-            )
-            request = _sample_request(_VALID_B64, model="glm-ocr-raw")
-            with pytest.raises(HTTPException) as exc_info:
-                await backend.process_raw(request)
-
-            assert isinstance(exc_info.value, HTTPException)
-            assert exc_info.value.status_code == 502
-
-        await backend.close()
-
-    @pytest.mark.asyncio
-    async def test_4xx_vllm_response_propagates_status_code(self, monkeypatch: MonkeyPatch) -> None:
-        backend = _make_backend(monkeypatch)
-
-        with respx.mock() as mocked:
-            mocked.post("http://vllm.local/v1/chat/completions").respond(401, text="unauthorized")
-            with pytest.raises(HTTPException) as exc_info:
-                await backend.process_raw(_sample_request(_VALID_B64, model="glm-ocr-raw"))
-            assert exc_info.value.status_code == 401
-
-        await backend.close()
-
-    @pytest.mark.asyncio
-    async def test_payload_forwards_temperature_and_max_tokens(self, monkeypatch: MonkeyPatch) -> None:
-        backend = _make_backend(monkeypatch)
-        captured: list[dict[str, Any]] = []
-
-        with respx.mock() as mocked:
-
-            def capture(request: httpx.Request) -> respx.MockResponse:
-                import json
-
-                captured.append(json.loads(request.content))
-                return respx.MockResponse(200, json={"choices": []})
-
-            mocked.post("http://vllm.local/v1/chat/completions").mock(side_effect=capture)
-            req = ChatCompletionRequest(
-                model="glm-ocr-raw",
-                messages=[ChatMessage(role="user", content="test")],
-                temperature=0.7,
-                max_tokens=512,
-            )
-            await backend.process_raw(req)
-
-        assert captured[0]["temperature"] == 0.7
-        assert captured[0]["max_tokens"] == 512
-        await backend.close()
-
-    @pytest.mark.asyncio
-    async def test_none_values_excluded_from_payload(self, monkeypatch: MonkeyPatch) -> None:
-        backend = _make_backend(monkeypatch)
-        captured: list[dict[str, Any]] = []
-
-        with respx.mock() as mocked:
-
-            def capture(request: httpx.Request) -> respx.MockResponse:
-                import json
-
-                captured.append(json.loads(request.content))
-                return respx.MockResponse(200, json={"choices": []})
-
-            mocked.post("http://vllm.local/v1/chat/completions").mock(side_effect=capture)
-            req = ChatCompletionRequest(model="glm-ocr-raw", messages=[ChatMessage(role="user", content="t")])
-            await backend.process_raw(req)
-
-        assert "temperature" not in captured[0]
-        assert "max_tokens" not in captured[0]
-        await backend.close()
-
-
-# ---------------------------------------------------------------------------
-# DefaultOCRBackend.__init__
-# ---------------------------------------------------------------------------
-
-
-class TestDefaultOCRBackendInit:
-    def test_auth_header_set_when_api_key_provided(self, monkeypatch: MonkeyPatch) -> None:
-        backend = _make_backend(monkeypatch, vllm_api_key="my-secret")
-        assert backend._raw_http.headers.get("authorization") == "Bearer my-secret"
-
-    def test_no_auth_header_when_api_key_is_none(self, monkeypatch: MonkeyPatch) -> None:
-        backend = _make_backend(monkeypatch, vllm_api_key=None)
-        assert "authorization" not in backend._raw_http.headers
 
 
 # ---------------------------------------------------------------------------

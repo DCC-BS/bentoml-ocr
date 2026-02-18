@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Protocol
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME
+MODEL_NAME = "glm-ocr"
 
 
 class ImageUrl(BaseModel):
@@ -42,7 +42,7 @@ class ChatMessage(BaseModel):
 class ChatCompletionRequest(BaseModel):
     """OpenAI-compatible chat completion request payload."""
 
-    model: str = Field(default=FULL_MODEL_NAME)
+    model: str = Field(default=MODEL_NAME)
     messages: list[ChatMessage]
     max_tokens: int | None = Field(default=None)
     temperature: float | None = Field(default=None)
@@ -102,5 +102,4 @@ class OCRBackend(Protocol):
     """Protocol defining the interface for OCR processing backends."""
 
     async def process_full(self, request: ChatCompletionRequest) -> ChatCompletionResponse: ...
-    async def process_raw(self, request: ChatCompletionRequest) -> dict[str, Any]: ...
     async def close(self) -> None: ...

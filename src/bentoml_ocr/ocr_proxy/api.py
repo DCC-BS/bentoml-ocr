@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any
 
 from dcc_backend_common.logger import get_logger
 from dependency_injector.wiring import Provide, inject
@@ -12,9 +11,9 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import JSONResponse
 
-from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME, RAW_MODEL_NAME
 from bentoml_ocr.ocr_proxy.container import Container
 from bentoml_ocr.ocr_proxy.models import (
+    MODEL_NAME,
     ChatCompletionRequest,
     ModelCard,
     ModelListResponse,
@@ -100,7 +99,7 @@ async def readyz(
 async def list_models() -> ModelListResponse:
     """List all models supported by this proxy."""
     return ModelListResponse(
-        data=[ModelCard(id=FULL_MODEL_NAME), ModelCard(id=RAW_MODEL_NAME)],
+        data=[ModelCard(id=MODEL_NAME)],
     )
 
 
@@ -109,25 +108,18 @@ async def list_models() -> ModelListResponse:
 async def chat_completions(
     request: ChatCompletionRequest,
     backend: OCRBackend = Depends(Provide[Container.backend]),  # noqa: B008
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """Process an OpenAI-compatible chat completion request through the OCR pipeline."""
     if request.stream:
         raise HTTPException(status_code=400, detail="Streaming is not supported by this proxy.")
 
-    if request.model not in {FULL_MODEL_NAME, RAW_MODEL_NAME}:
+    if request.model != MODEL_NAME:
         logger.warning("Unsupported model requested", model=request.model)
-        detail = f"Unsupported model '{request.model}'. Supported: {FULL_MODEL_NAME}, {RAW_MODEL_NAME}"
+        detail = f"Unsupported model '{request.model}'. Supported: {MODEL_NAME}"
         raise HTTPException(status_code=400, detail=detail)
 
     start_time = time.perf_counter()
-
-    if request.model == FULL_MODEL_NAME:
-        response = await backend.process_full(request)
-        duration_ms = (time.perf_counter() - start_time) * 1000
-        logger.info("Full OCR pipeline completed", model=request.model, duration_ms=round(duration_ms, 2))
-        return response.model_dump()
-
-    result = await backend.process_raw(request)
+    response = await backend.process_full(request)
     duration_ms = (time.perf_counter() - start_time) * 1000
-    logger.info("Raw passthrough completed", model=request.model, duration_ms=round(duration_ms, 2))
-    return result
+    logger.info("Full OCR pipeline completed", model=request.model, duration_ms=round(duration_ms, 2))
+    return response.model_dump()

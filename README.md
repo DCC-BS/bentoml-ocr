@@ -42,8 +42,7 @@ flowchart TD
 
 ## Supported models
 
-- `glm-ocr`: full two-stage OCR pipeline (layout + OCR)
-- `glm-ocr-raw`: passthrough mode to external vLLM endpoint # TODO: remove this model
+- `glm-ocr`: two-stage OCR pipeline (layout detection + OCR)
 
 ## Quickstart
 

@@ -22,13 +22,6 @@ class AppConfig(AbstractAppConfig):
         default=None, description="API key for authenticating proxy clients (disabled if unset)"
     )
     max_body_size_bytes: int = Field(default=50 * 1024 * 1024, description="Maximum request body size in bytes")
-    max_http_connections: int = Field(default=100, description="Maximum concurrent HTTP connections to vLLM")
-    max_keepalive_connections: int = Field(default=20, description="Maximum keep-alive HTTP connections to vLLM")
-    retry_max_attempts: int = Field(default=3, description="Maximum retry attempts for transient vLLM errors")
-    retry_backoff_base_seconds: float = Field(default=0.5, description="Base delay in seconds for exponential backoff")
-    retry_backoff_max_seconds: float = Field(
-        default=8.0, description="Maximum delay in seconds for exponential backoff"
-    )
 
     def apply_env(self) -> None:
         """Write required ``GLMOCR_OCR_*`` env vars derived from this config.
@@ -61,11 +54,6 @@ class AppConfig(AbstractAppConfig):
             config_path=os.getenv("GLMOCR_CONFIG_PATH"),
             proxy_api_key=os.getenv("PROXY_API_KEY"),
             max_body_size_bytes=int(os.getenv("MAX_BODY_SIZE_BYTES", str(50 * 1024 * 1024))),
-            max_http_connections=int(os.getenv("MAX_HTTP_CONNECTIONS", "100")),
-            max_keepalive_connections=int(os.getenv("MAX_KEEPALIVE_CONNECTIONS", "20")),
-            retry_max_attempts=int(os.getenv("RETRY_MAX_ATTEMPTS", "3")),
-            retry_backoff_base_seconds=float(os.getenv("RETRY_BACKOFF_BASE_SECONDS", "0.5")),
-            retry_backoff_max_seconds=float(os.getenv("RETRY_BACKOFF_MAX_SECONDS", "8.0")),
         )
         config.apply_env()
         return config
@@ -84,10 +72,5 @@ class AppConfig(AbstractAppConfig):
             f"  config_path={log_secret(self.config_path) if self.config_path else None},\n"
             f"  proxy_api_key={log_secret(self.proxy_api_key) if self.proxy_api_key else None},\n"
             f"  max_body_size_bytes={self.max_body_size_bytes},\n"
-            f"  max_http_connections={self.max_http_connections},\n"
-            f"  max_keepalive_connections={self.max_keepalive_connections},\n"
-            f"  retry_max_attempts={self.retry_max_attempts},\n"
-            f"  retry_backoff_base_seconds={self.retry_backoff_base_seconds},\n"
-            f"  retry_backoff_max_seconds={self.retry_backoff_max_seconds},\n"
             f")"
         )

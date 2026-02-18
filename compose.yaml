@@ -1,0 +1,92 @@
+services:
+  # ── vLLM serving GLM-OCR ──────────────────────────────────────────────
+  vllm-glm-ocr:
+    image: vllm/vllm-openai:cu130-nightly
+    ipc: host
+    ports:
+      - "${VLLM_HOST_PORT:-8001}:8000"
+    volumes:
+      - ${HF_CACHE_DIR:-.hf-cache}:/root/.cache/huggingface
+    environment:
+      HUGGING_FACE_HUB_TOKEN: "${HUGGING_FACE_HUB_TOKEN:-}"
+      HF_TOKEN: "${HF_TOKEN:-}"
+      LD_LIBRARY_PATH: /lib/x86_64-linux-gnu
+    entrypoint: /bin/bash
+    command: >-
+      -c "uv pip install --system --upgrade transformers &&
+          exec vllm serve
+            --model zai-org/GLM-OCR
+            --served-model-name zai-org/GLM-OCR
+            --port 8000
+            --trust-remote-code"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
+    restart: unless-stopped
+
+  # ── BentoML GLM-OCR proxy (layout + OCR → OpenAI-compatible API) ─────
+  bentoml-ocr:
+    image: ghcr.io/dcc-bs/bentoml-ocr:${BENTOML_OCR_TAG:-latest}
+    ports:
+      - "${BENTOML_HOST_PORT:-3000}:3000"
+    environment:
+      VLLM_API_URL: http://vllm-glm-ocr:8000/v1/chat/completions
+      VLLM_MODEL_NAME: zai-org/GLM-OCR
+      IS_PROD: "${IS_PROD:-true}"
+      GLMOCR_ENABLE_LAYOUT: "${GLMOCR_ENABLE_LAYOUT:-true}"
+      GLMOCR_REQUEST_TIMEOUT_SECONDS: "${GLMOCR_REQUEST_TIMEOUT_SECONDS:-300}"
+      GLMOCR_MAX_WORKERS: "${GLMOCR_MAX_WORKERS:-16}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    depends_on:
+      vllm-glm-ocr:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # ── Docling API server with UI ────────────────────────────────────────
+  # VLM pipeline and OCR engine are configured per-request (see README).
+  #
+  # Example: convert a PDF using the BentoML proxy as VLM pipeline
+  #   curl -X POST http://localhost:5001/v1/convert/source \
+  #     -H 'Content-Type: application/json' \
+  #     -d '{
+  #       "options": {
+  #         "pipeline": "vlm",
+  #         "vlm_pipeline_model_api": {
+  #           "url": "http://bentoml-ocr:3000/v1/chat/completions",
+  #           "params": {"model": "glm-ocr", "max_completion_tokens": 16384},
+  #           "timeout": 300,
+  #           "concurrency": 4,
+  #           "response_format": "markdown"
+  #         }
+  #       },
+  #       "http_sources": [{"url": "https://arxiv.org/pdf/2501.17887"}]
+  #     }'
+  docling-serve:
+    image: ghcr.io/docling-project/docling-serve:${DOCLING_SERVE_TAG:-latest}
+    ports:
+      - "${DOCLING_HOST_PORT:-5001}:5001"
+    environment:
+      DOCLING_SERVE_ENABLE_UI: "true"
+      DOCLING_SERVE_ENABLE_REMOTE_SERVICES: "true"
+      DOCLING_SERVE_ALLOW_EXTERNAL_PLUGINS: "true"
+      DOCLING_SERVE_LOG_LEVEL: "${DOCLING_SERVE_LOG_LEVEL:-INFO}"
+    depends_on:
+      - bentoml-ocr
+    restart: unless-stopped

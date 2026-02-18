@@ -71,18 +71,12 @@ class TestAppConfigStr:
         cfg = _test_config()
         text = str(cfg)
         assert "max_body_size_bytes=" in text
-        assert "max_http_connections=" in text
-        assert "retry_max_attempts=" in text
 
     def test_from_env_loads_new_fields(self, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setenv("VLLM_API_URL", "http://x/v1")
         monkeypatch.setenv("VLLM_MODEL_NAME", "m")
         monkeypatch.setenv("MAX_BODY_SIZE_BYTES", "1024")
-        monkeypatch.setenv("MAX_HTTP_CONNECTIONS", "50")
-        monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "5")
 
         cfg = AppConfig.from_env()
 
         assert cfg.max_body_size_bytes == 1024
-        assert cfg.max_http_connections == 50
-        assert cfg.retry_max_attempts == 5
