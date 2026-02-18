@@ -11,6 +11,7 @@ dependencies = [
   "httpx>=0.28",
   "uvicorn>=0.34",
   "pydantic>=2.10",
+  "pillow>=10.0",
   "pyyaml>=6.0.2",
   "glmocr @ git+https://github.com/zai-org/GLM-OCR.git",
   "dcc-backend-common>=0.1.4",

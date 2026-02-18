@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
+import os
 import time
 import uuid
 from typing import Any, cast
@@ -11,6 +13,7 @@ from typing import Any, cast
 import httpx
 from dcc_backend_common.logger import get_logger
 from fastapi import HTTPException
+from PIL import Image
 
 from bentoml_ocr.ocr_proxy.config import AppConfig
 from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME
@@ -28,11 +31,29 @@ from bentoml_ocr.ocr_proxy.models import (
 logger = get_logger(__name__)
 
 
+def validate_image_data_uri(data_uri: str) -> None:
+    """Verify that the base64 payload in a data URI decodes to a valid image.
+
+    Raises:
+        HTTPException: 422 if the data cannot be decoded as an image.
+    """
+    try:
+        raw_b64 = data_uri.split(";base64,", 1)[1]
+        image_bytes = base64.b64decode(raw_b64)
+        Image.open(io.BytesIO(image_bytes)).verify()
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="The provided image data is corrupted or not a valid image.",
+        )
+
+
 def extract_image_data_uri(messages: list[ChatMessage]) -> str:
     """Extract the first base64 image data URI from chat messages.
 
     Raises:
-        HTTPException: If no image_url content part with base64 data is found.
+        HTTPException: If no image_url content part with base64 data is found,
+            or if the image data is corrupted.
     """
     for message in messages:
         if not isinstance(message.content, list):
@@ -41,9 +62,12 @@ def extract_image_data_uri(messages: list[ChatMessage]) -> str:
             if isinstance(part, ContentImagePart):
                 url = part.image_url.url.strip()
                 if url.startswith("data:image/") and ";base64," in url:
+                    validate_image_data_uri(url)
                     return url
                 if looks_like_base64(url):
-                    return f"data:image/png;base64,{url}"
+                    uri = f"data:image/png;base64,{url}"
+                    validate_image_data_uri(uri)
+                    return uri
     raise HTTPException(
         status_code=400,
         detail="Request must include at least one image_url content item with base64 data URI.",
@@ -126,6 +150,14 @@ class DefaultOCRBackend:
         except Exception as exc:  # pragma: no cover - import is environment-dependent
             raise RuntimeError("glmocr package is not available. Install dependencies with `uv sync`.") from exc
 
+        # The GlmOcr constructor kwargs (api_url, model, api_key) only feed the
+        # MaaS config path.  In selfhosted mode the SDK reads connection settings
+        # from GLMOCR_OCR_* env vars → pipeline.ocr_api.*, so we bridge them here.
+        os.environ["GLMOCR_OCR_API_URL"] = config.vllm_api_url
+        os.environ["GLMOCR_OCR_MODEL"] = config.vllm_model_name
+        if config.vllm_api_key:
+            os.environ["GLMOCR_OCR_API_KEY"] = config.vllm_api_key
+
         kwargs: dict[str, Any] = {
             "mode": "selfhosted",
             "timeout": config.request_timeout_seconds,
@@ -149,16 +181,7 @@ class DefaultOCRBackend:
         text_prompt = extract_text_prompt(request.messages)
 
         def _run_parse() -> Any:
-            kwargs: dict[str, Any] = {
-                "api_url": self._config.vllm_api_url,
-                "model": self._config.vllm_model_name,
-                "timeout": self._config.request_timeout_seconds,
-                "enable_layout": self._config.enable_layout,
-                "save_layout_visualization": False,
-            }
-            if self._config.vllm_api_key:
-                kwargs["api_key"] = self._config.vllm_api_key
-            return self._parser.parse(image_uri, **kwargs)
+            return self._parser.parse(image_uri, save_layout_visualization=False)
 
         start = time.perf_counter()
         result = await asyncio.to_thread(_run_parse)

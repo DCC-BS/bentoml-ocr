@@ -95,6 +95,7 @@ curl -X POST "http://localhost:3000/v1/chat/completions" \
 | `IS_PROD`                        | production mode (JSON logging when true) | `false`                                     |
 | `VLLM_API_URL`                   | external vLLM OpenAI-compatible endpoint | **required**                                |
 | `VLLM_MODEL_NAME`                | model name sent to external vLLM         | **required**                                |
+| `VLLM_API_KEY`                   | API token for authenticating with the vLLM server | unset                                     |
 | `GLMOCR_REQUEST_TIMEOUT_SECONDS` | timeout for OCR and passthrough requests | `300`                                       |
 | `GLMOCR_ENABLE_LAYOUT`           | enable PP-DocLayout-V3 pipeline          | `true`                                      |
 | `GLMOCR_MAX_WORKERS`             | region OCR parallelism hint              | `16`                                        |

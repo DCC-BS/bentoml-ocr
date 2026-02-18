@@ -46,7 +46,7 @@ run: ## Run the application
 .PHONY: dev
 dev: ## Run the application in development mode
 	@echo "🚀 Running the application in development mode"
-	@uv run --env-file .env bentoml serve bentoml_ocr.service:GLMOCRProxy
+	@uv run --env-file .env bentoml serve --reload bentoml_ocr.service:GLMOCRProxy
 
 .PHONY: build
 build: clean-build ## Build wheel file

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import base64
+import io
+import os
 import sys
 import types
 from dataclasses import dataclass
@@ -11,6 +13,8 @@ from typing import Any
 import httpx
 import pytest
 import respx
+from fastapi import HTTPException
+from PIL import Image
 from pytest import MonkeyPatch
 
 from bentoml_ocr.ocr_proxy.backend import (
@@ -19,6 +23,7 @@ from bentoml_ocr.ocr_proxy.backend import (
     extract_markdown_from_glmocr_result,
     extract_text_prompt,
     looks_like_base64,
+    validate_image_data_uri,
 )
 from bentoml_ocr.ocr_proxy.config import AppConfig
 from bentoml_ocr.ocr_proxy.models import (
@@ -32,6 +37,14 @@ from bentoml_ocr.ocr_proxy.models import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _valid_image_b64() -> str:
+    """Create a minimal valid PNG image as a base64 string."""
+    img = Image.new("RGB", (4, 4), color=(255, 255, 255))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
 
 
 def _test_config(**overrides: Any) -> AppConfig:
@@ -122,15 +135,34 @@ class TestLooksLikeBase64:
 
 class TestExtractImageDataUri:
     def test_raw_base64_is_wrapped_in_data_uri(self) -> None:
-        raw_b64 = base64.b64encode(b"fake image bytes").decode()
+        raw_b64 = _valid_image_b64()
         messages = [_image_message(raw_b64)]
         result = extract_image_data_uri(messages)
         assert result == f"data:image/png;base64,{raw_b64}"
 
     def test_proper_data_uri_returned_unchanged(self) -> None:
-        uri = "data:image/jpeg;base64,AAAA"
+        b64 = _valid_image_b64()
+        uri = f"data:image/png;base64,{b64}"
         messages = [_image_message(uri)]
         assert extract_image_data_uri(messages) == uri
+
+
+# ---------------------------------------------------------------------------
+# validate_image_data_uri
+# ---------------------------------------------------------------------------
+
+
+class TestValidateImageDataUri:
+    def test_valid_image_passes(self) -> None:
+        b64 = _valid_image_b64()
+        validate_image_data_uri(f"data:image/png;base64,{b64}")
+
+    def test_corrupted_data_raises_422(self) -> None:
+        garbage_b64 = base64.b64encode(b"\x00\xff\xfe corrupted").decode()
+        with pytest.raises(HTTPException) as exc_info:
+            validate_image_data_uri(f"data:image/png;base64,{garbage_b64}")
+        assert exc_info.value.status_code == 422
+        assert "corrupted" in exc_info.value.detail.lower() or "not a valid image" in exc_info.value.detail.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +214,7 @@ class TestExtractMarkdownFromGlmOcrResult:
 
 
 class TestInitGlmOcrParser:
-    def test_creates_parser_with_config_path(self, monkeypatch: MonkeyPatch) -> None:
+    def test_sets_env_vars_and_constructor_kwargs(self, monkeypatch: MonkeyPatch) -> None:
         class SpyGlmOcr:
             def __init__(self, **kwargs: Any) -> None:
                 self.kwargs = kwargs
@@ -191,12 +223,19 @@ class TestInitGlmOcrParser:
         fake_module.GlmOcr = SpyGlmOcr  # type: ignore[attr-defined]
         monkeypatch.setitem(sys.modules, "glmocr", fake_module)
 
-        config = _test_config(config_path="/etc/glmocr.yaml")
+        config = _test_config(config_path="/etc/glmocr.yaml", vllm_api_key="secret")
         parser = DefaultOCRBackend._init_glmocr_parser(config)
+
+        assert os.environ["GLMOCR_OCR_API_URL"] == "http://vllm.local/v1/chat/completions"
+        assert os.environ["GLMOCR_OCR_MODEL"] == "glm-ocr"
+        assert os.environ["GLMOCR_OCR_API_KEY"] == "secret"
+
         assert parser.kwargs["config_path"] == "/etc/glmocr.yaml"
         assert parser.kwargs["mode"] == "selfhosted"
+        assert "api_url" not in parser.kwargs
+        assert "model" not in parser.kwargs
 
-    def test_creates_parser_without_config_path(self, monkeypatch: MonkeyPatch) -> None:
+    def test_skips_api_key_env_when_none(self, monkeypatch: MonkeyPatch) -> None:
         class SpyGlmOcr:
             def __init__(self, **kwargs: Any) -> None:
                 self.kwargs = kwargs
@@ -204,9 +243,13 @@ class TestInitGlmOcrParser:
         fake_module = types.ModuleType("glmocr")
         fake_module.GlmOcr = SpyGlmOcr  # type: ignore[attr-defined]
         monkeypatch.setitem(sys.modules, "glmocr", fake_module)
+        monkeypatch.delenv("GLMOCR_OCR_API_KEY", raising=False)
 
-        config = _test_config(config_path=None)
+        config = _test_config(config_path=None, vllm_api_key=None)
         parser = DefaultOCRBackend._init_glmocr_parser(config)
+
+        assert os.environ["GLMOCR_OCR_API_URL"] == "http://vllm.local/v1/chat/completions"
+        assert "GLMOCR_OCR_API_KEY" not in os.environ
         assert "config_path" not in parser.kwargs
 
 
@@ -214,28 +257,28 @@ class TestInitGlmOcrParser:
 # process_full
 # ---------------------------------------------------------------------------
 
-_VALID_B64 = base64.b64encode(b"\x89PNG\r\n\x1a\nfakedata").decode()
+_VALID_B64 = _valid_image_b64()
 
 
 class TestProcessFull:
     @pytest.mark.asyncio
-    async def test_api_key_forwarded_to_parser(self, monkeypatch: MonkeyPatch) -> None:
-        backend = _make_backend(monkeypatch, vllm_api_key="secret-key")
+    async def test_parse_called_with_image_uri(self, monkeypatch: MonkeyPatch) -> None:
+        backend = _make_backend(monkeypatch)
         parser: _FakeGlmOcrParser = backend._parser  # type: ignore[assignment]
-        parser.parse = lambda _uri, **kw: (_FakeParseItem("ok"), kw)  # type: ignore[assignment]
 
-        # Override parse to capture kwargs
-        captured: dict[str, Any] = {}
+        captured_uri: list[str] = []
 
-        def spy_parse(_uri: str, **kwargs: Any) -> _FakeParseItem:
-            captured.update(kwargs)
+        def spy_parse(uri: str, **kwargs: Any) -> _FakeParseItem:
+            captured_uri.append(uri)
             return _FakeParseItem(markdown_result="ok")
 
         parser.parse = spy_parse  # type: ignore[assignment]
 
         request = _sample_request(_VALID_B64)
-        await backend.process_full(request)
-        assert captured["api_key"] == "secret-key"
+        response = await backend.process_full(request)
+        assert len(captured_uri) == 1
+        assert _VALID_B64 in captured_uri[0]
+        assert response.choices[0].message.content == "ok"
         await backend.close()
 
     @pytest.mark.asyncio
