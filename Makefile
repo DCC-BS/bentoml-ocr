@@ -19,13 +19,13 @@ test: ## Test the code with pytest
 	@echo "🚀 Testing code: Running pytest"
 	@uv run python -m pytest --doctest-modules
 
-.PHONY: test\:e2e
-test\:e2e: ## Run end-to-end tests requiring external vLLM service
+.PHONY: test-e2e
+test-e2e: ## Run end-to-end tests requiring external vLLM service
 	@echo "🚀 Running e2e tests"
 	@uv run python -m pytest tests/integration/test_e2e.py -m e2e
 
-.PHONY: test\:cov
-test\:cov: ## Run all tests with code coverage
+.PHONY: test-cov
+test-cov: ## Run all tests with code coverage
 	@echo "🚀 Running tests with coverage"
 	@uv run python -m pytest --cov=bentoml_ocr --cov-report=term-missing --doctest-modules
 

@@ -78,7 +78,10 @@ class _FakeGlmOcrParser:
         return _FakeParseItem(markdown_result="")
 
     def close(self) -> None:
+        import threading
+
         self.closed = True
+        self.close_thread_id = threading.get_ident()
 
 
 def _make_backend(monkeypatch: MonkeyPatch, **config_overrides: Any) -> DefaultOCRBackend:
@@ -343,9 +346,13 @@ class TestProcessRaw:
 class TestClose:
     @pytest.mark.asyncio
     async def test_parser_close_is_invoked_in_thread(self, monkeypatch: MonkeyPatch) -> None:
+        import threading
+
         backend = _make_backend(monkeypatch)
         parser: _FakeGlmOcrParser = backend._parser  # type: ignore[assignment]
         assert not hasattr(parser, "closed")
 
+        main_thread_id = threading.get_ident()
         await backend.close()
         assert parser.closed is True
+        assert parser.close_thread_id != main_thread_id
