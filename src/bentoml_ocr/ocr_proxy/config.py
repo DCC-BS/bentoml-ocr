@@ -32,7 +32,7 @@ class AppConfig(AbstractAppConfig):
             request_timeout_seconds=int(os.getenv("GLMOCR_REQUEST_TIMEOUT_SECONDS", "300")),
             enable_layout=enable_layout_raw in {"1", "true", "yes", "on"},
             max_workers=int(os.getenv("GLMOCR_MAX_WORKERS", "16")),
-            log_level=os.getenv("GLMOCR_LOG_LEVEL", "INFO"),
+            log_level=os.getenv("LOG_LEVEL", "INFO"),
             config_path=os.getenv("GLMOCR_CONFIG_PATH"),
         )
 

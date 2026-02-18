@@ -1,8 +1,8 @@
 # BentoML GLM-OCR Docling-Compatible Proxy API
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
-[![CI](https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/<owner>/<repo>/branch/main/graph/badge.svg)](https://codecov.io/gh/<owner>/<repo>)
+[![CI](https://github.com/DCC-BS/bentoml-ocr/actions/workflows/ci.yml/badge.svg)](https://github.com/DCC-BS/bentoml-ocr/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/DCC-BS/bentoml-ocr/branch/main/graph/badge.svg)](https://codecov.io/gh/DCC-BS/bentoml-ocr)
 
 OpenAI-compatible VLM proxy built with BentoML that exposes GLM-OCR SDK for Docling.
 
@@ -92,12 +92,13 @@ curl -X POST "http://localhost:3000/v1/chat/completions" \
 
 | Variable                         | Description                              | Default                                     |
 | -------------------------------- | ---------------------------------------- | ------------------------------------------- |
-| `VLLM_API_URL`                   | external vLLM OpenAI-compatible endpoint | `http://localhost:8080/v1/chat/completions` |
-| `VLLM_MODEL_NAME`                | model name sent to external vLLM         | `glm-ocr`                                   |
+| `IS_PROD`                        | production mode (JSON logging when true) | `false`                                     |
+| `VLLM_API_URL`                   | external vLLM OpenAI-compatible endpoint | **required**                                |
+| `VLLM_MODEL_NAME`                | model name sent to external vLLM         | **required**                                |
 | `GLMOCR_REQUEST_TIMEOUT_SECONDS` | timeout for OCR and passthrough requests | `300`                                       |
 | `GLMOCR_ENABLE_LAYOUT`           | enable PP-DocLayout-V3 pipeline          | `true`                                      |
 | `GLMOCR_MAX_WORKERS`             | region OCR parallelism hint              | `16`                                        |
-| `GLMOCR_LOG_LEVEL`               | GLM-OCR SDK log level                    | `INFO`                                      |
+| `LOG_LEVEL`                      | log level                                | `INFO`                                      |
 | `GLMOCR_CONFIG_PATH`             | optional path to SDK config file         | unset                                       |
 
 
