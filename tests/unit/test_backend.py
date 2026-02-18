@@ -361,7 +361,7 @@ class TestProcessFull:
     @pytest.mark.asyncio
     async def test_parse_called_with_image_uri(self, monkeypatch: MonkeyPatch) -> None:
         backend = _make_backend(monkeypatch)
-        parser: _FakeGlmOcrParser = backend._parser  # type: ignore[assignment]
+        parser: _FakeGlmOcrParser = backend._parser
 
         captured_uri: list[str] = []
 
@@ -369,7 +369,7 @@ class TestProcessFull:
             captured_uri.append(uri)
             return _FakeParseItem(markdown_result="ok")
 
-        parser.parse = spy_parse  # type: ignore[assignment]
+        parser.parse = spy_parse
 
         request = _sample_request(_VALID_B64)
         response = await backend.process_full(request)
@@ -381,8 +381,8 @@ class TestProcessFull:
     @pytest.mark.asyncio
     async def test_empty_markdown_produces_fallback_message(self, monkeypatch: MonkeyPatch) -> None:
         backend = _make_backend(monkeypatch)
-        parser: _FakeGlmOcrParser = backend._parser  # type: ignore[assignment]
-        parser.parse = lambda _uri, **kw: _FakeParseItem(markdown_result="")  # type: ignore[assignment]
+        parser: _FakeGlmOcrParser = backend._parser
+        parser.parse = lambda _uri, **kw: _FakeParseItem(markdown_result="")
 
         request = _sample_request(_VALID_B64)
         response = await backend.process_full(request)
@@ -392,7 +392,7 @@ class TestProcessFull:
     @pytest.mark.asyncio
     async def test_parser_receives_save_layout_false_kwarg(self, monkeypatch: MonkeyPatch) -> None:
         backend = _make_backend(monkeypatch)
-        parser: _FakeGlmOcrParser = backend._parser  # type: ignore[assignment]
+        parser: _FakeGlmOcrParser = backend._parser
         captured_kwargs: list[dict[str, Any]] = []
         original_parse = parser.parse
 
@@ -400,7 +400,7 @@ class TestProcessFull:
             captured_kwargs.append(kwargs)
             return original_parse(uri, **kwargs)
 
-        parser.parse = spy  # type: ignore[assignment]
+        parser.parse = spy
         await backend.process_full(_sample_request(_VALID_B64))
         assert captured_kwargs[0].get("save_layout_visualization") is False
         await backend.close()
@@ -408,8 +408,8 @@ class TestProcessFull:
     @pytest.mark.asyncio
     async def test_response_model_is_always_full_model_name(self, monkeypatch: MonkeyPatch) -> None:
         backend = _make_backend(monkeypatch)
-        parser: _FakeGlmOcrParser = backend._parser  # type: ignore[assignment]
-        parser.parse = lambda _uri, **kw: _FakeParseItem(markdown_result="result")  # type: ignore[assignment]
+        parser: _FakeGlmOcrParser = backend._parser
+        parser.parse = lambda _uri, **kw: _FakeParseItem(markdown_result="result")
 
         request = _sample_request(_VALID_B64)
         response = await backend.process_full(request)
@@ -428,7 +428,7 @@ class TestClose:
         import threading
 
         backend = _make_backend(monkeypatch)
-        parser: _FakeGlmOcrParser = backend._parser  # type: ignore[assignment]
+        parser: _FakeGlmOcrParser = backend._parser
         assert not hasattr(parser, "closed")
 
         main_thread_id = threading.get_ident()
