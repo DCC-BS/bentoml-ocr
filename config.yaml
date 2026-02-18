@@ -14,15 +14,17 @@ pipeline:
     enabled: false
 
   ocr_api:
-    api_host: 127.0.0.1
-    api_port: 8080
-    model: glm-ocr
+    # api_host, api_port, model, api_url, and api_key are provided at runtime
+    # via AppConfig (env vars VLLM_API_URL, VLLM_MODEL_NAME, VLLM_API_KEY).
+    api_host: null
+    api_port: null
+    model: null
     api_path: /v1/chat/completions
     api_url: null
     api_mode: openai
     api_key: null
     headers: {}
-    verify_ssl: false
+    verify_ssl: true
     connect_timeout: 30
     request_timeout: 300
     retry_max_attempts: 2

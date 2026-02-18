@@ -3,14 +3,17 @@ name = "bentoml-ocr"
 version = "0.1.0"
 description = "BentoML GLM-OCR proxy API compatible with Docling VLM"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
   "bentoml>=1.4",
+  "dependency-injector>=4.48",
   "fastapi>=0.115",
   "httpx>=0.28",
   "uvicorn>=0.34",
   "pydantic>=2.10",
+  "pillow>=10.0",
   "pyyaml>=6.0.2",
+  "tenacity>=9.0",
   "glmocr @ git+https://github.com/zai-org/GLM-OCR.git",
   "dcc-backend-common>=0.1.4",
 ]
@@ -76,7 +79,7 @@ force-wrap-aliases = true
 
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit", "tests/integration"]
 addopts = [
     "-ra",
     "--import-mode=importlib",
@@ -84,6 +87,7 @@ addopts = [
 pythonpath = ["src"]
 markers = [
   "e2e: end-to-end tests requiring external vLLM service",
+  "load: load tests (long-running, requires external service)",
 ]
 filterwarnings = [
   "ignore::DeprecationWarning:pathspec",

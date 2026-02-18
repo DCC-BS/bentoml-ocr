@@ -19,24 +19,39 @@ test: ## Test the code with pytest
 	@echo "🚀 Testing code: Running pytest"
 	@uv run python -m pytest --doctest-modules
 
-.PHONY: docker up
-docker up: ## Build and run the Docker container
+.PHONY: test-e2e
+test-e2e: ## Run end-to-end tests requiring external vLLM service
+	@echo "🚀 Running e2e tests"
+	@uv run python -m pytest tests/integration/test_e2e.py -m "e2e and not load"
+
+.PHONY: test-load
+test-load: ## Run load test (40 concurrent requests, 5 min) against live service
+	@echo "🚀 Running load test"
+	@uv run python -m pytest tests/integration/test_e2e.py -m load -s
+
+.PHONY: test-cov
+test-cov: ## Run all tests with code coverage
+	@echo "🚀 Running tests with coverage"
+	@uv run python -m pytest --cov=bentoml_ocr --cov-report=term-missing --doctest-modules
+
+.PHONY: docker-up
+docker-up: ## Build and run the Docker container
 	@echo "🐳 Running docker compose"
 	@docker compose up -d
 
-.PHONY: docker down
-docker down: ## Stop and remove the Docker container
+.PHONY: docker-down
+docker-down: ## Stop and remove the Docker container
 	@echo "🐳 Stopping docker compose"
 	@docker compose down
 
 .PHONY: run
 run: ## Run the application
 	@echo "🚀 Running the application"
-	@uv run --env-file .env bentoml serve src/bentoml_ocr/service:GLMOCRProxy
+	@uv run --env-file .env bentoml serve bentoml_ocr.service:GLMOCRProxy
 .PHONY: dev
 dev: ## Run the application in development mode
 	@echo "🚀 Running the application in development mode"
-	@uv run --env-file .env bentoml serve src/bentoml_ocr/service:GLMOCRProxy
+	@uv run --env-file .env bentoml serve --reload bentoml_ocr.service:GLMOCRProxy
 
 .PHONY: build
 build: clean-build ## Build wheel file

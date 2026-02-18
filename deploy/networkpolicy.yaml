@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: glm-ocr-proxy
+  labels:
+    app.kubernetes.io/name: glm-ocr-proxy
+    app.kubernetes.io/part-of: bentoml-ocr
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: glm-ocr-proxy
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: http
+          protocol: TCP
+  egress:
+    - {}  # allow all egress (vLLM, DNS, etc.)

@@ -1,5 +1,9 @@
 # BentoML GLM-OCR Docling-Compatible Proxy API
 
+![Version](https://img.shields.io/badge/version-0.1.0-blue)
+[![CI](https://github.com/DCC-BS/bentoml-ocr/actions/workflows/ci.yml/badge.svg)](https://github.com/DCC-BS/bentoml-ocr/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/DCC-BS/bentoml-ocr/branch/main/graph/badge.svg)](https://codecov.io/gh/DCC-BS/bentoml-ocr)
+
 OpenAI-compatible VLM proxy built with BentoML that exposes GLM-OCR SDK for Docling.
 
 It combines:
@@ -38,8 +42,7 @@ flowchart TD
 
 ## Supported models
 
-- `glm-ocr`: full two-stage OCR pipeline (layout + OCR)
-- `glm-ocr-raw`: passthrough mode to external vLLM endpoint # TODO: remove this model
+- `glm-ocr`: two-stage OCR pipeline (layout detection + OCR)
 
 ## Quickstart
 
@@ -88,13 +91,16 @@ curl -X POST "http://localhost:3000/v1/chat/completions" \
 
 | Variable                         | Description                              | Default                                     |
 | -------------------------------- | ---------------------------------------- | ------------------------------------------- |
-| `VLLM_API_URL`                   | external vLLM OpenAI-compatible endpoint | `http://localhost:8080/v1/chat/completions` |
-| `VLLM_MODEL_NAME`                | model name sent to external vLLM         | `glm-ocr`                                   |
+| `IS_PROD`                        | production mode (JSON logging when true) | `false`                                     |
+| `VLLM_API_URL`                   | external vLLM OpenAI-compatible endpoint | **required**                                |
+| `VLLM_MODEL_NAME`                | model name sent to external vLLM         | **required**                                |
+| `VLLM_API_KEY`                   | API token for authenticating with the vLLM server | unset                                     |
 | `GLMOCR_REQUEST_TIMEOUT_SECONDS` | timeout for OCR and passthrough requests | `300`                                       |
 | `GLMOCR_ENABLE_LAYOUT`           | enable PP-DocLayout-V3 pipeline          | `true`                                      |
 | `GLMOCR_MAX_WORKERS`             | region OCR parallelism hint              | `16`                                        |
-| `GLMOCR_LOG_LEVEL`               | GLM-OCR SDK log level                    | `INFO`                                      |
+| `LOG_LEVEL`                      | log level                                | `INFO`                                      |
 | `GLMOCR_CONFIG_PATH`             | optional path to SDK config file         | unset                                       |
+| `MAX_BODY_SIZE_BYTES`            | maximum request body size in bytes       | `52428800` (50 MiB)                         |
 
 
 ## GLM-OCR vLLM container startup command
@@ -102,7 +108,7 @@ curl -X POST "http://localhost:3000/v1/chat/completions" \
 ```bash
 docker run -d \
   --rm --name ocr-glm \
-  --gpus all \
+  --gpus device=1 \
   --ipc=host \
   -p 8001:8000 \
   -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
@@ -152,6 +158,14 @@ converter = DocumentConverter(
 
 ## API reference
 
+### `GET /healthz`
+
+Liveness probe. Always returns `{"status": "ok"}`.
+
+### `GET /readyz`
+
+Readiness probe. Returns `{"status": "ok"}` once the backend has been initialized.
+
 ### `GET /v1/models`
 
 Returns supported model IDs.
@@ -165,34 +179,51 @@ Notes:
 - image content must be sent via `image_url.url` as `data:image/<mime>;base64,...`
 - streaming is currently not supported
 
-## Rigorous testing workflow
+## Testing
 
-### Unit + integration (required on every change)
+### Lint and type-check
+
+```bash
+make check
+```
+
+Or manually:
 
 ```bash
 uv run ruff check .
 uv run ruff format --check .
 uv run ty check .
-uv run pytest tests/ -v --cov=. --cov-report=term-missing -m "not e2e"
+```
+
+### Unit + integration tests
+
+```bash
+make test
+```
+
+Or with coverage:
+
+```bash
+make test-cov
 ```
 
 ### End-to-end tests (real infrastructure)
 
-Requires:
-
-- running proxy instance
-- running external vLLM instance
+Requires a running proxy instance and external vLLM instance.
 
 ```bash
 export E2E_PROXY_URL="http://localhost:3000"
-uv run pytest tests/test_e2e.py -v -m e2e
+make test-e2e
 ```
 
-Recommended for release candidates:
+### Load tests
 
-- run e2e against at least one real PDF and one real scanned image
-- compare OCR output quality against a golden baseline
-- capture latency and success-rate metrics for 100+ requests
+Runs 40 concurrent workers for 5 minutes against a live service:
+
+```bash
+export E2E_PROXY_URL="http://localhost:3000"
+make test-load
+```
 
 ## CI/CD
 
@@ -201,7 +232,7 @@ Recommended for release candidates:
 Runs on push/PR:
 
 - lint (`ruff`)
-- type-check (`mypy`)
+- type-check (`ty`)
 - unit + integration tests with coverage
 
 ### CD (`.github/workflows/cd.yml`)
@@ -210,7 +241,23 @@ Runs on version tags (`v*`):
 
 - builds Bento
 - containerizes with BentoML
+- scans image with Trivy (fails on CRITICAL/HIGH vulnerabilities)
 - pushes image to `ghcr.io/<owner>/<repo>:<tag>` and `:latest`
+
+## Docker Compose
+
+A `compose.yaml` is provided with three services: **vllm-glm-ocr**, **bentoml-ocr**, and **docling-serve**.
+
+```bash
+make docker-up    # start all services
+make docker-down  # stop all services
+```
+
+See `.env.example` for Docker Compose-specific settings (ports, image tags, HF token).
+
+## Kubernetes deployment
+
+Kustomize manifests are provided in the `deploy/` directory (Deployment, Service, HPA, PDB, NetworkPolicy).
 
 ## Build and run container
 
@@ -220,6 +267,7 @@ uv run bentoml build
 uv run bentoml containerize glm-ocr-proxy:latest
 docker run --gpus all -p 3000:3000 \
   -e VLLM_API_URL="http://vllm-host:8080/v1/chat/completions" \
+  -e VLLM_MODEL_NAME="zai-org/GLM-OCR" \
   glm-ocr-proxy:latest
 ```
 
@@ -229,5 +277,6 @@ docker run --gpus all -p 3000:3000 \
 docker pull ghcr.io/<owner>/<repo>:latest
 docker run --gpus all -p 3000:3000 \
   -e VLLM_API_URL="http://vllm-host:8080/v1/chat/completions" \
+  -e VLLM_MODEL_NAME="zai-org/GLM-OCR" \
   ghcr.io/<owner>/<repo>:latest
 ```

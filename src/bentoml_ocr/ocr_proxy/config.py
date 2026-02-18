@@ -3,10 +3,8 @@ from __future__ import annotations
 import os
 from typing import override
 
-from dcc_backend_common.config import AbstractAppConfig, log_secret
+from dcc_backend_common.config import AbstractAppConfig, get_env_or_throw, log_secret
 from pydantic import Field
-
-from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME
 
 
 class AppConfig(AbstractAppConfig):
@@ -17,9 +15,27 @@ class AppConfig(AbstractAppConfig):
     vllm_model_name: str = Field(description="The model name to use for vLLM requests")
     request_timeout_seconds: int = Field(default=300, description="Timeout in seconds for OCR requests")
     enable_layout: bool = Field(default=True, description="Enable layout analysis in GLM-OCR")
-    max_workers: int = Field(default=16, description="Maximum number of concurrent workers")
+    max_workers: int = Field(default=16, description="Maximum number of concurrent workers for OCR parsing thread pool")
     log_level: str = Field(default="INFO", description="Logging level")
     config_path: str | None = Field(default=None, description="Optional path to GLM-OCR config file")
+    proxy_api_key: str | None = Field(
+        default=None, description="API key for authenticating proxy clients (disabled if unset)"
+    )
+    max_body_size_bytes: int = Field(default=50 * 1024 * 1024, description="Maximum request body size in bytes")
+
+    def apply_env(self) -> None:
+        """Write required ``GLMOCR_OCR_*`` env vars derived from this config.
+
+        The GlmOcr SDK in *selfhosted* mode reads connection settings from
+        ``GLMOCR_OCR_API_URL`` and ``GLMOCR_OCR_MODEL``.  These must be
+        present **before** the parser is instantiated.
+
+        Note: ``GLMOCR_OCR_API_KEY`` is intentionally **not** persisted here.
+        It is set temporarily during parser initialisation and cleared
+        immediately afterwards (see ``DefaultOCRBackend._init_glmocr_parser``).
+        """
+        os.environ["GLMOCR_OCR_API_URL"] = self.vllm_api_url
+        os.environ["GLMOCR_OCR_MODEL"] = self.vllm_model_name
 
     @classmethod
     @override
@@ -27,16 +43,20 @@ class AppConfig(AbstractAppConfig):
         """Load configuration from environment variables."""
         enable_layout_raw = os.getenv("GLMOCR_ENABLE_LAYOUT", "true").lower()
 
-        return cls(
-            vllm_api_url=os.getenv("VLLM_API_URL", "http://localhost:8080/v1/chat/completions"),
+        config = cls(
+            vllm_api_url=get_env_or_throw("VLLM_API_URL"),
             vllm_api_key=os.getenv("VLLM_API_KEY"),
-            vllm_model_name=os.getenv("VLLM_MODEL_NAME", FULL_MODEL_NAME),
+            vllm_model_name=get_env_or_throw("VLLM_MODEL_NAME"),
             request_timeout_seconds=int(os.getenv("GLMOCR_REQUEST_TIMEOUT_SECONDS", "300")),
             enable_layout=enable_layout_raw in {"1", "true", "yes", "on"},
             max_workers=int(os.getenv("GLMOCR_MAX_WORKERS", "16")),
-            log_level=os.getenv("GLMOCR_LOG_LEVEL", "INFO"),
+            log_level=os.getenv("LOG_LEVEL", "INFO"),
             config_path=os.getenv("GLMOCR_CONFIG_PATH"),
+            proxy_api_key=os.getenv("PROXY_API_KEY"),
+            max_body_size_bytes=int(os.getenv("MAX_BODY_SIZE_BYTES", str(50 * 1024 * 1024))),
         )
+        config.apply_env()
+        return config
 
     @override
     def __str__(self) -> str:
@@ -50,5 +70,7 @@ class AppConfig(AbstractAppConfig):
             f"  max_workers={self.max_workers},\n"
             f"  log_level={self.log_level},\n"
             f"  config_path={log_secret(self.config_path) if self.config_path else None},\n"
+            f"  proxy_api_key={log_secret(self.proxy_api_key) if self.proxy_api_key else None},\n"
+            f"  max_body_size_bytes={self.max_body_size_bytes},\n"
             f")"
         )
