@@ -9,9 +9,9 @@ from typing import Any, cast
 import httpx
 from fastapi import HTTPException
 
-from ocr_proxy.config import RuntimeConfig
-from ocr_proxy.constants import FULL_MODEL_NAME
-from ocr_proxy.models import (
+from bentoml_ocr.ocr_proxy.config import RuntimeConfig
+from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME
+from bentoml_ocr.ocr_proxy.models import (
     ChatChoice,
     ChatCompletionRequest,
     ChatCompletionResponse,

@@ -4,10 +4,10 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
-from ocr_proxy.backend import DefaultOCRBackend, extract_image_data_uri
-from ocr_proxy.config import load_runtime_config
-from ocr_proxy.constants import FULL_MODEL_NAME, RAW_MODEL_NAME
-from ocr_proxy.models import (
+from bentoml_ocr.ocr_proxy.backend import DefaultOCRBackend, extract_image_data_uri
+from bentoml_ocr.ocr_proxy.config import load_runtime_config
+from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME, RAW_MODEL_NAME
+from bentoml_ocr.ocr_proxy.models import (
     ChatCompletionRequest,
     ModelCard,
     ModelListResponse,

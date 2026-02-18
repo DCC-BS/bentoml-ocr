@@ -5,10 +5,12 @@ from typing import Any
 
 import pytest
 import respx
-import service
 from httpx import ReadTimeout
 from pytest import MonkeyPatch
-from service import DefaultOCRBackend, RuntimeConfig
+
+from bentoml_ocr import service
+from bentoml_ocr.ocr_proxy.backend import DefaultOCRBackend
+from bentoml_ocr.ocr_proxy.config import RuntimeConfig
 
 
 @dataclass

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from ocr_proxy.constants import FULL_MODEL_NAME
+from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME
 
 
 @dataclass

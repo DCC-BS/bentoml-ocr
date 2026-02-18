@@ -8,9 +8,11 @@ from typing import Any
 import httpx
 import pytest
 import pytest_asyncio
-import service
 from PIL import Image
-from service import ChatCompletionRequest, ChatCompletionResponse, _build_openai_response
+
+from bentoml_ocr import service
+from bentoml_ocr.ocr_proxy.backend import build_openai_response
+from bentoml_ocr.ocr_proxy.models import ChatCompletionRequest, ChatCompletionResponse
 
 
 class FakeBackend:
@@ -30,7 +32,7 @@ class FakeBackend:
     async def process_full(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
         self.full_calls += 1
         self.last_request = request
-        return _build_openai_response("# OCR\n\nhello world", request.model)
+        return build_openai_response("# OCR\n\nhello world", request.model)
 
     async def process_raw(self, request: ChatCompletionRequest) -> dict[str, Any]:
         self.raw_calls += 1

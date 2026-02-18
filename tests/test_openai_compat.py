@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-import service
+
+from bentoml_ocr import service
 
 
 class FakeBackend:

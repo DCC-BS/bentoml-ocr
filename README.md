@@ -3,6 +3,7 @@
 OpenAI-compatible VLM proxy built with BentoML that exposes GLM-OCR SDK for Docling.
 
 It combines:
+
 - local **PP-DocLayout-V3** layout detection
 - external **vLLM-hosted GLM-OCR** recognition
 - OpenAI `/v1/chat/completions` API shape expected by Docling remote VLM runtime
@@ -33,37 +34,37 @@ flowchart TD
     SDK --> API
 ```
 
+
+
 ## Supported models
 
 - `glm-ocr`: full two-stage OCR pipeline (layout + OCR)
-- `glm-ocr-raw`: passthrough mode to external vLLM endpoint
+- `glm-ocr-raw`: passthrough mode to external vLLM endpoint # TODO: remove this model
 
 ## Quickstart
 
 ### 1) Prerequisites
 
-- Python 3.12
 - `uv` installed
-- A running external vLLM endpoint serving GLM-OCR
-
-Example vLLM endpoint:
-- `http://localhost:8080/v1/chat/completions`
+- A running external vLLM endpoint serving GLM-OCR. See [GLM-OCR vLLM container startup command](#glm-ocr-vllm-container-startup-command) for details.
 
 ### 2) Install dependencies
 
 ```bash
-uv sync --extra dev
+make install
 ```
 
-### 3) Run the service
+### 3) Configure the .env file
+
+Configure the .env file based on .env.example.
+
+### 4) Run the service
 
 ```bash
-export VLLM_API_URL="http://localhost:8080/v1/chat/completions"
-export VLLM_MODEL_NAME="glm-ocr"
-uv run bentoml serve service:GLMOCRProxy
+make run
 ```
 
-### 4) Test with curl
+### 5) Test with curl
 
 ```bash
 curl -X POST "http://localhost:3000/v1/chat/completions" \
@@ -84,24 +85,26 @@ curl -X POST "http://localhost:3000/v1/chat/completions" \
 
 ## Configuration
 
-| Variable | Description | Default |
-|---|---|---|
-| `VLLM_API_URL` | external vLLM OpenAI-compatible endpoint | `http://localhost:8080/v1/chat/completions` |
-| `VLLM_MODEL_NAME` | model name sent to external vLLM | `glm-ocr` |
-| `GLMOCR_REQUEST_TIMEOUT_SECONDS` | timeout for OCR and passthrough requests | `300` |
-| `GLMOCR_ENABLE_LAYOUT` | enable PP-DocLayout-V3 pipeline | `true` |
-| `GLMOCR_MAX_WORKERS` | region OCR parallelism hint | `16` |
-| `GLMOCR_LOG_LEVEL` | GLM-OCR SDK log level | `INFO` |
-| `GLMOCR_CONFIG_PATH` | optional path to SDK config file | unset |
+
+| Variable                         | Description                              | Default                                     |
+| -------------------------------- | ---------------------------------------- | ------------------------------------------- |
+| `VLLM_API_URL`                   | external vLLM OpenAI-compatible endpoint | `http://localhost:8080/v1/chat/completions` |
+| `VLLM_MODEL_NAME`                | model name sent to external vLLM         | `glm-ocr`                                   |
+| `GLMOCR_REQUEST_TIMEOUT_SECONDS` | timeout for OCR and passthrough requests | `300`                                       |
+| `GLMOCR_ENABLE_LAYOUT`           | enable PP-DocLayout-V3 pipeline          | `true`                                      |
+| `GLMOCR_MAX_WORKERS`             | region OCR parallelism hint              | `16`                                        |
+| `GLMOCR_LOG_LEVEL`               | GLM-OCR SDK log level                    | `INFO`                                      |
+| `GLMOCR_CONFIG_PATH`             | optional path to SDK config file         | unset                                       |
+
 
 ## GLM-OCR vLLM container startup command
 
 ```bash
 docker run -d \
-  --name ocr-glm \
+  --rm --name ocr-glm \
   --gpus all \
   --ipc=host \
-  -p 8002:8000 \
+  -p 8001:8000 \
   -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
   -e "HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}" \
   -e "HF_TOKEN=${HF_TOKEN:-}" \
@@ -110,6 +113,7 @@ docker run -d \
   vllm/vllm-openai:cu130-nightly \
   -c "uv pip install --system --upgrade transformers && exec vllm serve --model zai-org/GLM-OCR --served-model-name zai-org/GLM-OCR --port 8000 --trust-remote-code"
 ```
+
 ## Docling integration example
 
 ```python
@@ -157,6 +161,7 @@ Returns supported model IDs.
 OpenAI-compatible chat completion endpoint.
 
 Notes:
+
 - image content must be sent via `image_url.url` as `data:image/<mime>;base64,...`
 - streaming is currently not supported
 
@@ -167,13 +172,14 @@ Notes:
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy
+uv run ty check .
 uv run pytest tests/ -v --cov=. --cov-report=term-missing -m "not e2e"
 ```
 
 ### End-to-end tests (real infrastructure)
 
 Requires:
+
 - running proxy instance
 - running external vLLM instance
 
@@ -183,6 +189,7 @@ uv run pytest tests/test_e2e.py -v -m e2e
 ```
 
 Recommended for release candidates:
+
 - run e2e against at least one real PDF and one real scanned image
 - compare OCR output quality against a golden baseline
 - capture latency and success-rate metrics for 100+ requests
@@ -192,6 +199,7 @@ Recommended for release candidates:
 ### CI (`.github/workflows/ci.yml`)
 
 Runs on push/PR:
+
 - lint (`ruff`)
 - type-check (`mypy`)
 - unit + integration tests with coverage
@@ -199,6 +207,7 @@ Runs on push/PR:
 ### CD (`.github/workflows/cd.yml`)
 
 Runs on version tags (`v*`):
+
 - builds Bento
 - containerizes with BentoML
 - pushes image to `ghcr.io/<owner>/<repo>:<tag>` and `:latest`

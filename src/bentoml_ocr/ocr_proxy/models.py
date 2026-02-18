@@ -4,7 +4,7 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-from ocr_proxy.constants import FULL_MODEL_NAME
+from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME
 
 
 class ImageUrl(BaseModel):

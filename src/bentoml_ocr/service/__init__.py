@@ -1,18 +1,8 @@
 import bentoml
-from ocr_proxy.api import app, set_backend_for_tests
-from ocr_proxy.backend import DefaultOCRBackend, build_openai_response
-from ocr_proxy.config import (
-    RuntimeConfig as RuntimeConfig,
-    load_runtime_config,
-)
-from ocr_proxy.constants import (
-    FULL_MODEL_NAME as FULL_MODEL_NAME,
-    RAW_MODEL_NAME as RAW_MODEL_NAME,
-)
-from ocr_proxy.models import (
-    ChatCompletionRequest as ChatCompletionRequest,
-    ChatCompletionResponse as ChatCompletionResponse,
-)
+
+from bentoml_ocr.ocr_proxy.api import app, set_backend_for_tests
+from bentoml_ocr.ocr_proxy.backend import DefaultOCRBackend, build_openai_response
+from bentoml_ocr.ocr_proxy.config import load_runtime_config
 
 _build_openai_response = build_openai_response
 
