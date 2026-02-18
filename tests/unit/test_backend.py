@@ -208,6 +208,7 @@ class TestValidateImageDataUri:
         with pytest.raises(HTTPException) as exc_info:
             validate_image_data_uri("data:image/png,notbase64")
         assert exc_info.value.status_code == 422
+        assert "not a base64 data URI" in exc_info.value.detail
 
     def test_jpeg_image_passes(self) -> None:
         buf = io.BytesIO()

@@ -35,13 +35,19 @@ def validate_image_data_uri(data_uri: str) -> None:
     """Verify that the base64 payload in a data URI decodes to a valid image.
 
     Raises:
-        HTTPException: 422 if the data cannot be decoded as an image.
+        HTTPException: 422 if the value is not a base64 data URI or the
+            decoded payload is not a valid image.
     """
+    if ";base64," not in data_uri:
+        raise HTTPException(
+            status_code=422,
+            detail="Provided value is not a base64 data URI.",
+        )
+    raw_b64 = data_uri.split(";base64,", 1)[1]
     try:
-        raw_b64 = data_uri.split(";base64,", 1)[1]
         image_bytes = base64.b64decode(raw_b64)
         Image.open(io.BytesIO(image_bytes)).verify()
-    except Exception as exc:
+    except (ValueError, OSError, SyntaxError) as exc:
         raise HTTPException(
             status_code=422,
             detail="The provided image data is corrupted or not a valid image.",
