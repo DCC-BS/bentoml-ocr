@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: glm-ocr-proxy
+  namespace: bentoml-ocr
+  labels:
+    app.kubernetes.io/name: glm-ocr-proxy
+    app.kubernetes.io/part-of: bentoml-ocr
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: glm-ocr-proxy
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

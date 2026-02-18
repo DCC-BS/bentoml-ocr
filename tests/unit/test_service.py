@@ -127,5 +127,5 @@ async def test_raw_error_propagates_status_code(
         response = await app_client.post("/v1/chat/completions", json=sample_openai_request)
 
     assert response.status_code == 500
-    assert "vLLM internal error" in response.text
+    assert "Upstream service returned 500" in response.text
     await backend.close()

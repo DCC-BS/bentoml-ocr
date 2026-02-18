@@ -287,6 +287,7 @@ dependencies = [
     { name = "pillow" },
     { name = "pydantic" },
     { name = "pyyaml" },
+    { name = "tenacity" },
     { name = "uvicorn" },
 ]
 
@@ -318,6 +319,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "respx", marker = "extra == 'dev'", specifier = ">=0.22" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9" },
+    { name = "tenacity", specifier = ">=9.0" },
     { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.12" },
     { name = "uvicorn", specifier = ">=0.34" },
 ]

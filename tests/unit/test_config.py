@@ -35,20 +35,6 @@ class TestAppConfigApplyEnv:
         assert os.environ["GLMOCR_OCR_API_URL"] == "http://vllm/v1"
         assert os.environ["GLMOCR_OCR_MODEL"] == "my-model"
 
-    def test_sets_api_key_when_provided(self, monkeypatch: MonkeyPatch) -> None:
-        monkeypatch.delenv("GLMOCR_OCR_API_KEY", raising=False)
-
-        cfg = _test_config(vllm_api_key="secret")
-        cfg.apply_env()
-
-        assert os.environ["GLMOCR_OCR_API_KEY"] == "secret"
-
-    def test_does_not_set_api_key_when_none(self, monkeypatch: MonkeyPatch) -> None:
-        monkeypatch.delenv("GLMOCR_OCR_API_KEY", raising=False)
-
-        cfg = _test_config(vllm_api_key=None)
-        cfg.apply_env()
-
         assert "GLMOCR_OCR_API_KEY" not in os.environ
 
     def test_from_env_calls_apply_env(self, monkeypatch: MonkeyPatch) -> None:
@@ -61,3 +47,42 @@ class TestAppConfigApplyEnv:
 
         assert os.environ["GLMOCR_OCR_API_URL"] == "http://x/v1"
         assert os.environ["GLMOCR_OCR_MODEL"] == "test-model"
+
+
+class TestAppConfigStr:
+    def test_masks_vllm_api_key(self) -> None:
+        cfg = _test_config(vllm_api_key="super-secret-token-12345")
+        text = str(cfg)
+        assert "super-secret-token-12345" not in text
+        assert "vllm_api_key=" in text
+        assert "None" not in text.split("vllm_api_key=")[1].split(",")[0]
+
+    def test_shows_none_when_keys_absent(self) -> None:
+        cfg = _test_config(vllm_api_key=None)
+        text = str(cfg)
+        assert "vllm_api_key=None" in text
+
+    def test_masks_config_path(self) -> None:
+        cfg = _test_config(config_path="/secret/path/to/config.yaml")
+        text = str(cfg)
+        assert "/secret/path/to/config.yaml" not in text
+
+    def test_includes_new_fields(self) -> None:
+        cfg = _test_config()
+        text = str(cfg)
+        assert "max_body_size_bytes=" in text
+        assert "max_http_connections=" in text
+        assert "retry_max_attempts=" in text
+
+    def test_from_env_loads_new_fields(self, monkeypatch: MonkeyPatch) -> None:
+        monkeypatch.setenv("VLLM_API_URL", "http://x/v1")
+        monkeypatch.setenv("VLLM_MODEL_NAME", "m")
+        monkeypatch.setenv("MAX_BODY_SIZE_BYTES", "1024")
+        monkeypatch.setenv("MAX_HTTP_CONNECTIONS", "50")
+        monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "5")
+
+        cfg = AppConfig.from_env()
+
+        assert cfg.max_body_size_bytes == 1024
+        assert cfg.max_http_connections == 50
+        assert cfg.retry_max_attempts == 5

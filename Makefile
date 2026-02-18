@@ -29,13 +29,13 @@ test-cov: ## Run all tests with code coverage
 	@echo "🚀 Running tests with coverage"
 	@uv run python -m pytest --cov=bentoml_ocr --cov-report=term-missing --doctest-modules
 
-.PHONY: docker up
-docker up: ## Build and run the Docker container
+.PHONY: docker-up
+docker-up: ## Build and run the Docker container
 	@echo "🐳 Running docker compose"
 	@docker compose up -d
 
-.PHONY: docker down
-docker down: ## Stop and remove the Docker container
+.PHONY: docker-down
+docker-down: ## Stop and remove the Docker container
 	@echo "🐳 Stopping docker compose"
 	@docker compose down
 

@@ -24,7 +24,7 @@ pipeline:
     api_mode: openai
     api_key: null
     headers: {}
-    verify_ssl: false
+    verify_ssl: true
     connect_timeout: 30
     request_timeout: 300
     retry_max_attempts: 2

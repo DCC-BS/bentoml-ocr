@@ -8,4 +8,3 @@ include:
   - "config.yaml"
   - "pyproject.toml"
   - "README.md"
-  - "tests/**/*.py"

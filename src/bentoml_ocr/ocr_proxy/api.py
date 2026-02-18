@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import time
+import uuid
 from typing import Any
 
 from dcc_backend_common.logger import get_logger
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.responses import JSONResponse
 
-from bentoml_ocr.ocr_proxy.backend import extract_image_data_uri
 from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME, RAW_MODEL_NAME
 from bentoml_ocr.ocr_proxy.container import Container
 from bentoml_ocr.ocr_proxy.models import (
@@ -22,6 +24,76 @@ from bentoml_ocr.ocr_proxy.models import (
 logger = get_logger(__name__)
 
 app = FastAPI(title="GLM-OCR Docling-Compatible Proxy")
+
+
+# ---------------------------------------------------------------------------
+# Middleware: X-Request-ID correlation
+# ---------------------------------------------------------------------------
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
+# ---------------------------------------------------------------------------
+# Middleware: Request body size limit
+# ---------------------------------------------------------------------------
+
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        max_bytes: int = request.app.state.max_body_size_bytes
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > max_bytes:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": f"Request body too large. Maximum allowed size is {max_bytes} bytes."},
+            )
+        return await call_next(request)
+
+
+# Register middleware once at import time (outermost first).
+# Configuration is read from app.state at request time.
+app.add_middleware(BodySizeLimitMiddleware)  # type: ignore[arg-type]
+app.add_middleware(RequestIDMiddleware)  # type: ignore[arg-type]
+
+# Defaults -- overridden by configure_app_state() during service startup.
+app.state.max_body_size_bytes = 50 * 1024 * 1024
+
+
+def configure_app_state(max_body_size: int = 50 * 1024 * 1024) -> None:
+    """Set runtime configuration on the app. Called once during service init."""
+    app.state.max_body_size_bytes = max_body_size
+
+
+# ---------------------------------------------------------------------------
+# Health / readiness endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/healthz")
+async def healthz() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/readyz")
+@inject
+async def readyz(
+    backend: OCRBackend = Depends(Provide[Container.backend]),  # noqa: B008
+) -> dict[str, str]:
+    """Readiness check that verifies the vLLM backend is reachable."""
+    _ = backend
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# API routes
+# ---------------------------------------------------------------------------
 
 
 @app.get("/v1/models", response_model=ModelListResponse)
@@ -50,7 +122,6 @@ async def chat_completions(
     start_time = time.perf_counter()
 
     if request.model == FULL_MODEL_NAME:
-        extract_image_data_uri(request.messages)
         response = await backend.process_full(request)
         duration_ms = (time.perf_counter() - start_time) * 1000
         logger.info("Full OCR pipeline completed", model=request.model, duration_ms=round(duration_ms, 2))

@@ -13,6 +13,7 @@ dependencies = [
   "pydantic>=2.10",
   "pillow>=10.0",
   "pyyaml>=6.0.2",
+  "tenacity>=9.0",
   "glmocr @ git+https://github.com/zai-org/GLM-OCR.git",
   "dcc-backend-common>=0.1.4",
 ]

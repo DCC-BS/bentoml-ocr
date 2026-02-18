@@ -11,7 +11,7 @@ import pytest_asyncio
 from PIL import Image
 
 from bentoml_ocr.ocr_proxy import api
-from bentoml_ocr.ocr_proxy.backend import build_openai_response
+from bentoml_ocr.ocr_proxy.backend import build_openai_response, extract_image_data_uri
 from bentoml_ocr.ocr_proxy.container import Container
 from bentoml_ocr.ocr_proxy.models import ChatCompletionRequest, ChatCompletionResponse
 
@@ -33,6 +33,7 @@ class FakeBackend:
         }
 
     async def process_full(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
+        extract_image_data_uri(request.messages)
         self.full_calls += 1
         self.last_request = request
         return build_openai_response("# OCR\n\nhello world", request.model)
