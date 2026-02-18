@@ -1,14 +1,17 @@
+"""FastAPI application exposing OpenAI-compatible chat completion and model endpoints."""
+
 from __future__ import annotations
 
 import time
 from typing import Any
 
 from dcc_backend_common.logger import get_logger
-from fastapi import FastAPI, HTTPException
+from dependency_injector.wiring import Provide, inject
+from fastapi import Depends, FastAPI, HTTPException
 
-from bentoml_ocr.ocr_proxy.backend import DefaultOCRBackend, extract_image_data_uri
-from bentoml_ocr.ocr_proxy.config import AppConfig
+from bentoml_ocr.ocr_proxy.backend import extract_image_data_uri
 from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME, RAW_MODEL_NAME
+from bentoml_ocr.ocr_proxy.container import Container
 from bentoml_ocr.ocr_proxy.models import (
     ChatCompletionRequest,
     ModelCard,
@@ -20,30 +23,22 @@ logger = get_logger(__name__)
 
 app = FastAPI(title="GLM-OCR Docling-Compatible Proxy")
 
-_backend: OCRBackend | None = None
-
-
-def set_backend_for_tests(backend: OCRBackend | None) -> None:
-    global _backend
-    _backend = backend
-
-
-def get_backend() -> OCRBackend:
-    global _backend
-    if _backend is None:
-        _backend = DefaultOCRBackend(AppConfig.from_env())
-    return _backend
-
 
 @app.get("/v1/models", response_model=ModelListResponse)
 async def list_models() -> ModelListResponse:
+    """List all models supported by this proxy."""
     return ModelListResponse(
         data=[ModelCard(id=FULL_MODEL_NAME), ModelCard(id=RAW_MODEL_NAME)],
     )
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest) -> dict[str, Any]:
+@inject
+async def chat_completions(
+    request: ChatCompletionRequest,
+    backend: OCRBackend = Depends(Provide[Container.backend]),  # noqa: B008
+) -> dict[str, Any]:
+    """Process an OpenAI-compatible chat completion request through the OCR pipeline."""
     if request.stream:
         raise HTTPException(status_code=400, detail="Streaming is not supported by this proxy.")
 
@@ -52,7 +47,6 @@ async def chat_completions(request: ChatCompletionRequest) -> dict[str, Any]:
         detail = f"Unsupported model '{request.model}'. Supported: {FULL_MODEL_NAME}, {RAW_MODEL_NAME}"
         raise HTTPException(status_code=400, detail=detail)
 
-    backend = get_backend()
     start_time = time.perf_counter()
 
     if request.model == FULL_MODEL_NAME:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from io import BytesIO
 from typing import Any
 
@@ -10,12 +10,15 @@ import pytest
 import pytest_asyncio
 from PIL import Image
 
-from bentoml_ocr import service
+from bentoml_ocr.ocr_proxy import api
 from bentoml_ocr.ocr_proxy.backend import build_openai_response
+from bentoml_ocr.ocr_proxy.container import Container
 from bentoml_ocr.ocr_proxy.models import ChatCompletionRequest, ChatCompletionResponse
 
 
 class FakeBackend:
+    """Test double that records calls and returns canned responses."""
+
     def __init__(self) -> None:
         self.full_calls = 0
         self.raw_calls = 0
@@ -41,6 +44,16 @@ class FakeBackend:
 
     async def close(self) -> None:
         return None
+
+
+@pytest.fixture(autouse=True)
+def wire_container() -> Generator[Container, None, None]:
+    """Wire the DI container with a default FakeBackend for every test."""
+    container = Container()
+    container.wire(modules=[api])
+    container.backend.override(FakeBackend())
+    yield container
+    container.unwire()
 
 
 @pytest.fixture
@@ -73,11 +86,6 @@ def sample_openai_request(sample_image_b64: str) -> dict[str, Any]:
 
 @pytest_asyncio.fixture
 async def app_client() -> AsyncGenerator[httpx.AsyncClient, None]:
-    transport = httpx.ASGITransport(app=service.app)
+    transport = httpx.ASGITransport(app=api.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
-
-
-@pytest.fixture(autouse=True)
-def reset_backend() -> None:
-    service.set_backend_for_tests(None)

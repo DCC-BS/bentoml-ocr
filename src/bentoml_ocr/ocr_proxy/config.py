@@ -3,10 +3,8 @@ from __future__ import annotations
 import os
 from typing import override
 
-from dcc_backend_common.config import AbstractAppConfig, log_secret
+from dcc_backend_common.config import AbstractAppConfig, get_env_or_throw, log_secret
 from pydantic import Field
-
-from bentoml_ocr.ocr_proxy.constants import FULL_MODEL_NAME
 
 
 class AppConfig(AbstractAppConfig):
@@ -28,9 +26,9 @@ class AppConfig(AbstractAppConfig):
         enable_layout_raw = os.getenv("GLMOCR_ENABLE_LAYOUT", "true").lower()
 
         return cls(
-            vllm_api_url=os.getenv("VLLM_API_URL", "http://localhost:8080/v1/chat/completions"),
+            vllm_api_url=get_env_or_throw("VLLM_API_URL"),
             vllm_api_key=os.getenv("VLLM_API_KEY"),
-            vllm_model_name=os.getenv("VLLM_MODEL_NAME", FULL_MODEL_NAME),
+            vllm_model_name=get_env_or_throw("VLLM_MODEL_NAME"),
             request_timeout_seconds=int(os.getenv("GLMOCR_REQUEST_TIMEOUT_SECONDS", "300")),
             enable_layout=enable_layout_raw in {"1", "true", "yes", "on"},
             max_workers=int(os.getenv("GLMOCR_MAX_WORKERS", "16")),

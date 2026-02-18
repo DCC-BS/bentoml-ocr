@@ -3,8 +3,8 @@ description: "Docling-compatible OpenAI VLM proxy backed by GLM-OCR SDK."
 labels:
   project: bentoml-ocr
 include:
-  - "service/**/*.py"
-  - "ocr_proxy/**/*.py"
+  - "src/bentoml_ocr/service/**/*.py"
+  - "src/bentoml_ocr/ocr_proxy/**/*.py"
   - "config.yaml"
   - "pyproject.toml"
   - "README.md"

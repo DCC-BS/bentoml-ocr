@@ -8,9 +8,9 @@ import respx
 from httpx import ReadTimeout
 from pytest import MonkeyPatch
 
-from bentoml_ocr import service
 from bentoml_ocr.ocr_proxy.backend import DefaultOCRBackend
 from bentoml_ocr.ocr_proxy.config import AppConfig
+from bentoml_ocr.ocr_proxy.container import Container
 
 
 @dataclass
@@ -35,17 +35,22 @@ def _test_config() -> AppConfig:
     )
 
 
+def _make_backend(monkeypatch: MonkeyPatch) -> DefaultOCRBackend:
+    monkeypatch.setattr(DefaultOCRBackend, "_init_glmocr_parser", lambda self, config: FakeGlmOcrParser())
+    return DefaultOCRBackend(_test_config())
+
+
 @pytest.mark.asyncio
 async def test_full_pipeline_response_with_fake_parser(
     monkeypatch: MonkeyPatch,
+    wire_container: Container,
     app_client: Any,
     sample_openai_request: dict[str, Any],
 ) -> None:
-    monkeypatch.setattr(DefaultOCRBackend, "_init_glmocr_parser", lambda self, config: FakeGlmOcrParser())
-    backend = DefaultOCRBackend(_test_config())
-    service.set_backend_for_tests(backend)
+    backend = _make_backend(monkeypatch)
+    with wire_container.backend.override(backend):
+        response = await app_client.post("/v1/chat/completions", json=sample_openai_request)
 
-    response = await app_client.post("/v1/chat/completions", json=sample_openai_request)
     assert response.status_code == 200
     body = response.json()
     assert body["model"] == "glm-ocr"
@@ -57,15 +62,14 @@ async def test_full_pipeline_response_with_fake_parser(
 @pytest.mark.asyncio
 async def test_raw_model_passthrough_hits_vllm(
     monkeypatch: MonkeyPatch,
+    wire_container: Container,
     app_client: Any,
     sample_openai_request: dict[str, Any],
 ) -> None:
-    monkeypatch.setattr(DefaultOCRBackend, "_init_glmocr_parser", lambda self, config: FakeGlmOcrParser())
-    backend = DefaultOCRBackend(_test_config())
-    service.set_backend_for_tests(backend)
+    backend = _make_backend(monkeypatch)
     sample_openai_request["model"] = "glm-ocr-raw"
 
-    with respx.mock(assert_all_called=True) as mocked:
+    with wire_container.backend.override(backend), respx.mock(assert_all_called=True) as mocked:
         route = mocked.post("http://vllm.local/v1/chat/completions").respond(
             200,
             json={
@@ -89,15 +93,14 @@ async def test_raw_model_passthrough_hits_vllm(
 @pytest.mark.asyncio
 async def test_raw_timeout_returns_504(
     monkeypatch: MonkeyPatch,
+    wire_container: Container,
     app_client: Any,
     sample_openai_request: dict[str, Any],
 ) -> None:
-    monkeypatch.setattr(DefaultOCRBackend, "_init_glmocr_parser", lambda self, config: FakeGlmOcrParser())
-    backend = DefaultOCRBackend(_test_config())
-    service.set_backend_for_tests(backend)
+    backend = _make_backend(monkeypatch)
     sample_openai_request["model"] = "glm-ocr-raw"
 
-    with respx.mock(assert_all_called=True) as mocked:
+    with wire_container.backend.override(backend), respx.mock(assert_all_called=True) as mocked:
         mocked.post("http://vllm.local/v1/chat/completions").mock(side_effect=ReadTimeout("timeout"))
         response = await app_client.post("/v1/chat/completions", json=sample_openai_request)
 
@@ -109,15 +112,14 @@ async def test_raw_timeout_returns_504(
 @pytest.mark.asyncio
 async def test_raw_error_propagates_status_code(
     monkeypatch: MonkeyPatch,
+    wire_container: Container,
     app_client: Any,
     sample_openai_request: dict[str, Any],
 ) -> None:
-    monkeypatch.setattr(DefaultOCRBackend, "_init_glmocr_parser", lambda self, config: FakeGlmOcrParser())
-    backend = DefaultOCRBackend(_test_config())
-    service.set_backend_for_tests(backend)
+    backend = _make_backend(monkeypatch)
     sample_openai_request["model"] = "glm-ocr-raw"
 
-    with respx.mock(assert_all_called=True) as mocked:
+    with wire_container.backend.override(backend), respx.mock(assert_all_called=True) as mocked:
         mocked.post("http://vllm.local/v1/chat/completions").respond(
             500,
             text="vLLM internal error",

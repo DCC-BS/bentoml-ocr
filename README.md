@@ -1,5 +1,9 @@
 # BentoML GLM-OCR Docling-Compatible Proxy API
 
+![Version](https://img.shields.io/badge/version-0.1.0-blue)
+[![CI](https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/<owner>/<repo>/branch/main/graph/badge.svg)](https://codecov.io/gh/<owner>/<repo>)
+
 OpenAI-compatible VLM proxy built with BentoML that exposes GLM-OCR SDK for Docling.
 
 It combines:

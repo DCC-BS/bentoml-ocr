@@ -1,3 +1,5 @@
+"""OCR backend implementation using GLM-OCR SDK and vLLM passthrough."""
+
 from __future__ import annotations
 
 import asyncio
@@ -27,6 +29,11 @@ logger = get_logger(__name__)
 
 
 def extract_image_data_uri(messages: list[ChatMessage]) -> str:
+    """Extract the first base64 image data URI from chat messages.
+
+    Raises:
+        HTTPException: If no image_url content part with base64 data is found.
+    """
     for message in messages:
         if not isinstance(message.content, list):
             continue
@@ -44,6 +51,7 @@ def extract_image_data_uri(messages: list[ChatMessage]) -> str:
 
 
 def extract_text_prompt(messages: list[ChatMessage]) -> str:
+    """Concatenate all text content from chat messages into a single prompt string."""
     prompts: list[str] = []
     for message in messages:
         if isinstance(message.content, str):
@@ -56,6 +64,7 @@ def extract_text_prompt(messages: list[ChatMessage]) -> str:
 
 
 def looks_like_base64(value: str) -> bool:
+    """Check whether a string is valid base64-encoded data."""
     try:
         base64.b64decode(value, validate=True)
     except Exception:
@@ -64,6 +73,7 @@ def looks_like_base64(value: str) -> bool:
 
 
 def build_openai_response(content: str, model: str) -> ChatCompletionResponse:
+    """Wrap OCR output text in an OpenAI-compatible chat completion response."""
     completion_tokens = max(1, len(content) // 4)
     return ChatCompletionResponse(
         id=f"chatcmpl-{uuid.uuid4().hex}",
@@ -79,6 +89,7 @@ def build_openai_response(content: str, model: str) -> ChatCompletionResponse:
 
 
 def extract_markdown_from_glmocr_result(result: Any) -> str:
+    """Extract concatenated markdown text from a GLM-OCR parse result."""
     if isinstance(result, list):
         markdown_parts = [getattr(item, "markdown_result", "") for item in result]
         markdown = "\n\n".join(part for part in markdown_parts if part)
@@ -88,7 +99,14 @@ def extract_markdown_from_glmocr_result(result: Any) -> str:
 
 
 class DefaultOCRBackend:
-    def __init__(self, config: AppConfig):
+    """OCR backend that delegates to the GLM-OCR SDK for full parsing and to vLLM for raw passthrough."""
+
+    def __init__(self, config: AppConfig) -> None:
+        """Initialize the backend with an HTTP client for vLLM and a GLM-OCR parser.
+
+        Args:
+            config: Application configuration containing vLLM and GLM-OCR settings.
+        """
         self._config = config
         headers = {"Authorization": f"Bearer {config.vllm_api_key}"} if config.vllm_api_key else {}
         self._raw_http = httpx.AsyncClient(timeout=self._config.request_timeout_seconds, headers=headers)
@@ -119,8 +137,16 @@ class DefaultOCRBackend:
         return GlmOcr(**kwargs)
 
     async def process_full(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
+        """Run the full GLM-OCR pipeline on the image in the request.
+
+        Args:
+            request: Chat completion request containing an image as base64 data URI.
+
+        Returns:
+            An OpenAI-compatible response with the OCR markdown as content.
+        """
         image_uri = extract_image_data_uri(request.messages)
-        extract_text_prompt(request.messages)
+        text_prompt = extract_text_prompt(request.messages)
 
         def _run_parse() -> Any:
             kwargs: dict[str, Any] = {
@@ -148,31 +174,45 @@ class DefaultOCRBackend:
             model=request.model,
             parse_duration_ms=round(parse_ms, 2),
             result_length=len(markdown),
+            text_prompt=text_prompt or None,
         )
         return build_openai_response(markdown, FULL_MODEL_NAME)
 
     async def process_raw(self, request: ChatCompletionRequest) -> dict[str, Any]:
+        """Forward the request directly to vLLM and return the raw JSON response.
+
+        Args:
+            request: Chat completion request to pass through to vLLM.
+
+        Returns:
+            The raw JSON response from the vLLM server.
+
+        Raises:
+            HTTPException: On timeout, HTTP errors, or non-2xx vLLM responses.
+        """
         payload = request.model_dump(exclude_none=True)
         if not payload.get("model"):
             payload["model"] = self._config.vllm_model_name
         try:
             response = await self._raw_http.post(self._config.vllm_api_url, json=payload)
+            response.raise_for_status()
         except httpx.TimeoutException as exc:
             logger.error("vLLM request timed out", url=self._config.vllm_api_url)
             raise HTTPException(status_code=504, detail="Timed out calling external vLLM.") from exc
-        except httpx.HTTPError as exc:
-            logger.error("vLLM request failed", url=self._config.vllm_api_url, error=str(exc))
-            raise HTTPException(status_code=502, detail=f"vLLM request failed: {exc}") from exc
-        if response.status_code >= 400:
+        except httpx.HTTPStatusError as exc:
             logger.error(
                 "vLLM returned error status",
                 url=self._config.vllm_api_url,
-                status_code=response.status_code,
+                status_code=exc.response.status_code,
             )
-            raise HTTPException(status_code=response.status_code, detail=response.text)
+            raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
+        except httpx.HTTPError as exc:
+            logger.error("vLLM request failed", url=self._config.vllm_api_url, error=str(exc))
+            raise HTTPException(status_code=502, detail=f"vLLM request failed: {exc}") from exc
         return cast(dict[str, Any], response.json())
 
     async def close(self) -> None:
+        """Shut down the HTTP client and GLM-OCR parser."""
         await self._raw_http.aclose()
         parser_close = getattr(self._parser, "close", None)
         if callable(parser_close):
