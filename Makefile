@@ -58,6 +58,16 @@ build: clean-build ## Build wheel file
 	@echo "🚀 Creating wheel file"
 	@uvx --from build pyproject-build --installer uv
 
+.PHONY: bento-build
+bento-build: ## Build a Bento (reads deps from [project] dependencies)
+	@echo "🚀 Building Bento"
+	@uv run bentoml build
+
+.PHONY: bento-containerize
+bento-containerize: bento-build ## Build a Bento and containerize it as a Docker image
+	@echo "🐳 Containerizing Bento"
+	@uv run bentoml containerize bentoml-ocr:latest -t glm-ocr-proxy:latest
+
 .PHONY: clean-build
 clean-build: ## Clean build artifacts
 	@echo "🚀 Removing build artifacts"

@@ -18,9 +18,6 @@ class AppConfig(AbstractAppConfig):
     max_workers: int = Field(default=16, description="Maximum number of concurrent workers for OCR parsing thread pool")
     log_level: str = Field(default="INFO", description="Logging level")
     config_path: str | None = Field(default=None, description="Optional path to GLM-OCR config file")
-    proxy_api_key: str | None = Field(
-        default=None, description="API key for authenticating proxy clients (disabled if unset)"
-    )
     max_body_size_bytes: int = Field(default=50 * 1024 * 1024, description="Maximum request body size in bytes")
 
     def apply_env(self) -> None:
@@ -52,7 +49,6 @@ class AppConfig(AbstractAppConfig):
             max_workers=int(os.getenv("GLMOCR_MAX_WORKERS", "16")),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             config_path=os.getenv("GLMOCR_CONFIG_PATH"),
-            proxy_api_key=os.getenv("PROXY_API_KEY"),
             max_body_size_bytes=int(os.getenv("MAX_BODY_SIZE_BYTES", str(50 * 1024 * 1024))),
         )
         config.apply_env()
@@ -70,7 +66,6 @@ class AppConfig(AbstractAppConfig):
             f"  max_workers={self.max_workers},\n"
             f"  log_level={self.log_level},\n"
             f"  config_path={log_secret(self.config_path) if self.config_path else None},\n"
-            f"  proxy_api_key={log_secret(self.proxy_api_key) if self.proxy_api_key else None},\n"
             f"  max_body_size_bytes={self.max_body_size_bytes},\n"
             f")"
         )

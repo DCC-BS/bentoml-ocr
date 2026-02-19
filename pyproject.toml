@@ -93,3 +93,23 @@ filterwarnings = [
   "ignore::DeprecationWarning:pathspec",
   "ignore::DeprecationWarning:_bentoml_sdk",
 ]
+
+[tool.bentoml.build]
+service = "bentoml_ocr.service:GLMOCRProxy"
+description = "Docling-compatible OpenAI VLM proxy backed by GLM-OCR SDK."
+include = [
+  "src/bentoml_ocr/**/*.py",
+  "config.yaml",
+  "pyproject.toml",
+  "README.md",
+]
+envs = [
+  { name = "PYTHONPATH", value = "/home/bentoml/bento/src/src" },
+]
+
+[tool.bentoml.build.labels]
+project = "bentoml-ocr"
+
+[tool.bentoml.build.docker]
+python_version = "3.13"
+system_packages = ["libgl1", "libglib2.0-0"]

@@ -12,22 +12,6 @@ from bentoml_ocr.ocr_proxy.container import Container
 
 logger = get_logger(__name__)
 
-image = (
-    bentoml.images.Image(python_version="3.13")
-    .python_packages(
-        "bentoml>=1.4",
-        "dependency-injector>=4.48",
-        "fastapi>=0.115",
-        "httpx>=0.28",
-        "uvicorn>=0.34",
-        "pydantic>=2.10",
-        "pyyaml>=6.0.2",
-        "tenacity>=9.0",
-        "glmocr @ git+https://github.com/zai-org/GLM-OCR.git",
-    )
-    .system_packages("libgl1", "libglib2.0-0")
-)
-
 _container: Container | None = None
 
 
@@ -48,7 +32,6 @@ app.router.lifespan_context = _lifespan
 
 
 @bentoml.service(
-    image=image,
     traffic={"timeout": 300},
 )
 @bentoml.asgi_app(app, path="/")

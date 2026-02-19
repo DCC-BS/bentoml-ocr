@@ -7,7 +7,7 @@ server:
   debug: false
 
 logging:
-  level: INFO
+  level: WARNING
 
 pipeline:
   maas:

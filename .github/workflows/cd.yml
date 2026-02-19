@@ -36,12 +36,10 @@ jobs:
         run: uv run bentoml build
 
       - name: Build container image
-        run: uv run bentoml containerize glm-ocr-proxy:latest
-
-      - name: Tag image for GHCR
-        run: |
-          docker tag glm-ocr-proxy:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-          docker tag glm-ocr-proxy:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        run: >-
+          uv run bentoml containerize bentoml-ocr:latest
+          -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # v0.34.0
