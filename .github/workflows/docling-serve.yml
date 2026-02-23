@@ -1,6 +1,10 @@
 name: Build docling-serve with layout and OCR plugins
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "plugins/**"
   workflow_dispatch:
     inputs:
       docling_serve_tag:
@@ -32,15 +36,20 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
+      - name: Determine tag
+        id: tag
+        run: echo "value=${{ inputs.docling_serve_tag || 'latest' }}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@263435318d21b8e681c14492fe198e19c816612b # v6.18.0
         with:
           context: plugins
           file: plugins/Dockerfile.docling-serve
           build-args: |
-            DOCLING_SERVE_TAG=${{ inputs.docling_serve_tag }}
+            DOCLING_SERVE_TAG=${{ steps.tag.outputs.value }}
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.docling_serve_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -1,30 +1,16 @@
 [project]
-name = "bentoml-ocr"
+name = "docling-serve-plugins"
 version = "0.1.0"
-description = "BentoML GLM-OCR proxy API compatible with Docling VLM"
+description = "Patched docling-serve image with PP-DocLayout-V3 layout and GLM-OCR plugins"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = [
-  "bentoml>=1.4",
-  "dependency-injector>=4.48",
-  "fastapi>=0.115",
-  "httpx>=0.28",
-  "uvicorn>=0.34",
-  "pydantic>=2.10",
-  "pillow>=10.0",
-  "pyyaml>=6.0.2",
-  "tenacity>=9.0",
-  "glmocr @ git+https://github.com/zai-org/GLM-OCR.git",
-  "dcc-backend-common>=0.1.4",
-]
+dependencies = []
 
 [project.optional-dependencies]
 dev = [
-  "ty>=0.0.12",
   "pytest>=8.0",
-  "pytest-asyncio>=0.25",
   "pytest-cov>=6.0",
-  "respx>=0.22",
+  "httpx>=0.28",
   "ruff>=0.9",
   "pre-commit>=2.20.0",
 ]
@@ -33,21 +19,16 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.metadata]
-allow-direct-references = true
-
 [tool.hatch.build.targets.wheel]
-packages = ["src/bentoml_ocr"]
+packages = ["src/docling_serve_plugins"]
 
 [tool.ruff]
-# Same as Black.
 line-length = 120
 indent-width = 4
-
 target-version = "py313"
+extend-exclude = ["plugins/gradio_ui.py"]
 
 [tool.ruff.lint]
-# Add rules to enable
 select = [
     "E",   # pycodestyle
     "F",   # pyflakes
@@ -55,61 +36,24 @@ select = [
     "B",   # flake8-bugbear
 ]
 
-# Ignore specific rules
 ignore = ["E501"]
 
 [tool.ruff.format]
-# Use double quotes for strings.
 quote-style = "double"
-
-# Indent with spaces, rather than tabs.
 indent-style = "space"
-
-# Respect magic trailing commas.
 skip-magic-trailing-comma = false
-
-# Automatically detect the appropriate line ending.
 line-ending = "auto"
 
 [tool.ruff.lint.isort]
-# Group imports by type (standard library, third-party, first-party).
 combine-as-imports = true
 force-wrap-aliases = true
 
-
-
 [tool.pytest.ini_options]
-testpaths = ["tests/unit", "tests/integration"]
+testpaths = ["tests/e2e"]
 addopts = [
     "-ra",
     "--import-mode=importlib",
 ]
-pythonpath = ["src"]
 markers = [
-  "e2e: end-to-end tests requiring external vLLM service",
-  "load: load tests (long-running, requires external service)",
+  "e2e: end-to-end tests requiring a running docling-serve + vLLM stack",
 ]
-filterwarnings = [
-  "ignore::DeprecationWarning:pathspec",
-  "ignore::DeprecationWarning:_bentoml_sdk",
-]
-
-[tool.bentoml.build]
-service = "bentoml_ocr.service:GLMOCRProxy"
-description = "Docling-compatible OpenAI VLM proxy backed by GLM-OCR SDK."
-include = [
-  "src/bentoml_ocr/**/*.py",
-  "config.yaml",
-  "pyproject.toml",
-  "README.md",
-]
-envs = [
-  { name = "PYTHONPATH", value = "/home/bentoml/bento/src/src" },
-]
-
-[tool.bentoml.build.labels]
-project = "bentoml-ocr"
-
-[tool.bentoml.build.docker]
-python_version = "3.13"
-system_packages = ["libgl1", "libglib2.0-0"]
