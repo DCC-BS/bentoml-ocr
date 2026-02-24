@@ -8,65 +8,34 @@ install: ## Install the virtual environment and install the pre-commit hooks
 check: ## Run code quality tools.
 	@echo "🚀 Checking lock file consistency with 'pyproject.toml'"
 	@uv lock --locked
-	@echo "🚀 Linting code: Running pre-commit"
+	@echo "🚀 Linting code: Running ruff"
 	@uv run ruff format
 	@uv run ruff check --fix
-	@echo "🚀 Static type checking: Running ty"
-	@uv run ty check ./src/bentoml_ocr
 
 .PHONY: test
-test: ## Test the code with pytest
+test: ## Run tests (skips e2e unless DOCLING_SERVE_URL is set)
 	@echo "🚀 Testing code: Running pytest"
-	@uv run python -m pytest --doctest-modules
+	@uv run python -m pytest
 
 .PHONY: test-e2e
-test-e2e: ## Run end-to-end tests requiring external vLLM service
+test-e2e: ## Run end-to-end tests (requires DOCLING_SERVE_URL)
 	@echo "🚀 Running e2e tests"
-	@uv run python -m pytest tests/integration/test_e2e.py -m "e2e and not load"
+	@uv run python -m pytest tests/e2e -m e2e -v
 
-.PHONY: test-load
-test-load: ## Run load test (40 concurrent requests, 5 min) against live service
-	@echo "🚀 Running load test"
-	@uv run python -m pytest tests/integration/test_e2e.py -m load -s
-
-.PHONY: test-cov
-test-cov: ## Run all tests with code coverage
-	@echo "🚀 Running tests with coverage"
-	@uv run python -m pytest --cov=bentoml_ocr --cov-report=term-missing --doctest-modules
+.PHONY: docker-build
+docker-build: ## Build the patched docling-serve image locally
+	@echo "🐳 Building docling-serve image"
+	@docker build -t docling-serve-plugins:latest -f plugins/Dockerfile.docling-serve plugins/
 
 .PHONY: docker-up
-docker-up: ## Build and run the Docker container
+docker-up: ## Start the Docker Compose stack
 	@echo "🐳 Running docker compose"
 	@docker compose up -d
 
 .PHONY: docker-down
-docker-down: ## Stop and remove the Docker container
+docker-down: ## Stop the Docker Compose stack
 	@echo "🐳 Stopping docker compose"
 	@docker compose down
-
-.PHONY: run
-run: ## Run the application
-	@echo "🚀 Running the application"
-	@uv run --env-file .env bentoml serve bentoml_ocr.service:GLMOCRProxy
-.PHONY: dev
-dev: ## Run the application in development mode
-	@echo "🚀 Running the application in development mode"
-	@uv run --env-file .env bentoml serve --reload bentoml_ocr.service:GLMOCRProxy
-
-.PHONY: build
-build: clean-build ## Build wheel file
-	@echo "🚀 Creating wheel file"
-	@uvx --from build pyproject-build --installer uv
-
-.PHONY: clean-build
-clean-build: ## Clean build artifacts
-	@echo "🚀 Removing build artifacts"
-	@uv run python -c "import shutil; import os; shutil.rmtree('dist') if os.path.exists('dist') else None"
-
-.PHONY: sync-env
-sync-env: ## Sync .env with .env.example
-	@echo "🔄 Syncing .env with .env.example"
-	@uvx --from dcc-backend-common sync-env-with-example
 
 .PHONY: help
 help:

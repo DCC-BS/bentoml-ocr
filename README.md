@@ -1,109 +1,201 @@
-# BentoML GLM-OCR Docling-Compatible Proxy API
+# Docling-Serve Plugins: PP-DocLayout-V3 + GLM-OCR
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
 [![CI](https://github.com/DCC-BS/bentoml-ocr/actions/workflows/ci.yml/badge.svg)](https://github.com/DCC-BS/bentoml-ocr/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/DCC-BS/bentoml-ocr/branch/main/graph/badge.svg)](https://codecov.io/gh/DCC-BS/bentoml-ocr)
 
-OpenAI-compatible VLM proxy built with BentoML that exposes GLM-OCR SDK for Docling.
+A patched [docling-serve](https://github.com/docling-project/docling-serve) Docker
+image that bundles two community plugins:
 
-It combines:
+| Plugin | PyPI | Purpose |
+| --- | --- | --- |
+| [docling-glm-ocr](https://github.com/DCC-BS/docling-glm-ocr) | `pip install docling-glm-ocr` | Remote OCR via a vLLM-hosted GLM-OCR model |
+| [docling-pp-doc-layout](https://github.com/DCC-BS/docling-pp-doc-layout) | `pip install docling-pp-doc-layout` | Local layout detection via PP-DocLayout-V3 |
 
-- local **PP-DocLayout-V3** layout detection
-- external **vLLM-hosted GLM-OCR** recognition
-- OpenAI `/v1/chat/completions` API shape expected by Docling remote VLM runtime
+The plugins are selectable per-request through the standard docling-serve API:
+
+- **Layout** -- `layout_custom_config: { "kind": "ppdoclayout-v3" }`
+- **OCR** -- `ocr_engine: "glm-ocr-remote"`
+
+The patched Gradio UI also exposes both engines as selectable options.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    subgraph doclingClient [Docling Client]
-        DC[VlmPipeline with ApiVlmOptions]
+    subgraph doclingServe ["docling-serve (patched image)"]
+        STD["Standard pipeline"]
+        LP["PP-DocLayout-V3 plugin"]
+        OP["GLM-OCR plugin"]
+        STD --> LP
+        STD --> OP
     end
 
-    subgraph bentoService [BentoML Service]
-        API["/v1/chat/completions"]
-        MODELS["/v1/models"]
-        SDK[GLM-OCR SDK]
-        LAYOUT[PP-DocLayout-V3]
+    subgraph vllmServer [vLLM Server]
+        GLMOCR["zai-org/GLM-OCR"]
     end
 
-    subgraph externalVllm [External vLLM]
-        VLLM["zai-org/GLM-OCR served model"]
-    end
-
-    DC --> API
-    API --> SDK
-    SDK --> LAYOUT
-    SDK --> VLLM
-    SDK --> API
+    OP -- "remote OCR" --> GLMOCR
 ```
-
-
-
-## Supported models
-
-- `glm-ocr`: two-stage OCR pipeline (layout detection + OCR)
 
 ## Quickstart
 
 ### 1) Prerequisites
 
-- `uv` installed
-- A running external vLLM endpoint serving GLM-OCR. See [GLM-OCR vLLM container startup command](#glm-ocr-vllm-container-startup-command) for details.
+- Docker with GPU support (NVIDIA)
+- A HuggingFace token with access to the GLM-OCR model
 
-### 2) Install dependencies
+### 2) Configure
+
+Copy `.env.example` to `.env` and set the required variables:
 
 ```bash
-make install
+cp .env.example .env
+# edit .env — at minimum set HF_TOKEN
 ```
 
-### 3) Configure the .env file
-
-Configure the .env file based on .env.example.
-
-### 4) Run the service
+### 3) Start the stack
 
 ```bash
-make run
+make docker-up
 ```
 
-### 5) Test with curl
+This starts two services:
+
+| Service | Purpose |
+| --- | --- |
+| **vllm-glm-ocr** | vLLM server hosting `zai-org/GLM-OCR` (GPU 1) |
+| **docling-serve** | Docling API + Gradio UI with both plugins (GPU 0) |
+
+The Gradio UI is available at http://localhost:5001.
+
+### 4) Convert a document
 
 ```bash
-curl -X POST "http://localhost:3000/v1/chat/completions" \
-  -H "Content-Type: application/json" \
+curl -X POST http://localhost:5001/v1/convert/source \
+  -H 'Content-Type: application/json' \
   -d '{
-    "model":"glm-ocr",
-    "messages":[
-      {
-        "role":"user",
-        "content":[
-          {"type":"text","text":"Recognize the page"},
-          {"type":"image_url","image_url":{"url":"data:image/png;base64,<BASE64_IMAGE>"}}
-        ]
-      }
-    ]
+    "options": {
+      "ocr_engine": "glm-ocr-remote",
+      "layout_custom_config": { "kind": "ppdoclayout-v3" }
+    },
+    "sources": [{"kind": "http", "url": "https://arxiv.org/pdf/2501.17887"}]
   }'
 ```
 
-## Configuration
+## Docker Compose
 
+The `compose.yaml` references the pre-built image from GHCR:
 
-| Variable                         | Description                              | Default                                     |
-| -------------------------------- | ---------------------------------------- | ------------------------------------------- |
-| `IS_PROD`                        | production mode (JSON logging when true) | `false`                                     |
-| `VLLM_API_URL`                   | external vLLM OpenAI-compatible endpoint | **required**                                |
-| `VLLM_MODEL_NAME`                | model name sent to external vLLM         | **required**                                |
-| `VLLM_API_KEY`                   | API token for authenticating with the vLLM server | unset                                     |
-| `GLMOCR_REQUEST_TIMEOUT_SECONDS` | timeout for OCR and passthrough requests | `300`                                       |
-| `GLMOCR_ENABLE_LAYOUT`           | enable PP-DocLayout-V3 pipeline          | `true`                                      |
-| `GLMOCR_MAX_WORKERS`             | region OCR parallelism hint              | `16`                                        |
-| `LOG_LEVEL`                      | log level                                | `INFO`                                      |
-| `GLMOCR_CONFIG_PATH`             | optional path to SDK config file         | unset                                       |
-| `MAX_BODY_SIZE_BYTES`            | maximum request body size in bytes       | `52428800` (50 MiB)                         |
+```
+ghcr.io/dcc-bs/bentoml-ocr-docling-serve:latest
+```
 
+| Service | Image |
+| --- | --- |
+| **vllm-glm-ocr** | `vllm/vllm-openai:cu130-nightly` |
+| **docling-serve** | `ghcr.io/dcc-bs/bentoml-ocr-docling-serve:latest` |
 
-## GLM-OCR vLLM container startup command
+Environment variables are documented in `.env.example`.
+
+```bash
+make docker-up    # start all services
+make docker-down  # stop all services
+```
+
+### Building the image locally
+
+To build the patched docling-serve image from source:
+
+```bash
+make docker-build
+```
+
+This runs `docker build` against `plugins/Dockerfile.docling-serve` and tags the
+result as `docling-serve-plugins:latest`.
+
+#### Running the locally built image
+
+To test the local image without pushing it to GHCR, use the compose stack but
+override the image name via `DOCLING_SERVE_TAG` and a matching tag alias, or run
+`docling-serve` directly with `docker run`:
+
+```bash
+docker run --rm \
+  --gpus device=0 \
+  -p 5001:5001 \
+  -e DOCLING_SERVE_ENABLE_UI=true \
+  -e DOCLING_SERVE_ENABLE_REMOTE_SERVICES=true \
+  -e DOCLING_SERVE_ALLOW_EXTERNAL_PLUGINS=true \
+  -e GLMOCR_REMOTE_OCR_API_URL=http://host.docker.internal:8001/v1/chat/completions \
+  docling-serve-plugins:latest
+```
+
+The Gradio UI is then available at http://localhost:5001.
+
+Alternatively, re-tag the local image to match the compose service name and use
+the normal `make docker-up` flow:
+
+```bash
+make docker-build
+docker tag docling-serve-plugins:latest ghcr.io/dcc-bs/bentoml-ocr-docling-serve:latest
+make docker-up
+```
+
+## Plugin configuration
+
+### GLM-OCR remote OCR
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `api_url` | vLLM chat completion URL | `GLMOCR_REMOTE_OCR_API_URL` env or `http://localhost:8001/v1/chat/completions` |
+| `model_name` | Model name sent to vLLM | `zai-org/GLM-OCR` |
+| `prompt` | Text prompt for each crop | `GLMOCR_REMOTE_OCR_PROMPT` env or default prompt |
+| `timeout` | HTTP timeout per crop (seconds) | `120` |
+| `max_tokens` | Max tokens per completion | `16384` |
+| `scale` | Image crop rendering scale | `3.0` |
+| `max_concurrent_requests` | Max concurrent API requests | `10` |
+| `max_retries` | Max retry attempts for HTTP errors | `3` |
+| `retry_backoff_factor` | Exponential backoff factor | `2.0` |
+
+### PP-DocLayout-V3 layout
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `model_name` | HuggingFace model repo ID | `PaddlePaddle/PP-DocLayoutV3_safetensors` |
+| `confidence_threshold` | Minimum detection confidence (0-1) | `0.5` |
+| `batch_size` | Batch size for layout inference | `8` |
+
+## Python SDK usage
+
+The plugins can also be used directly with the docling Python SDK (without
+docling-serve). See `examples/convert_with_plugins.py`:
+
+```python
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
+
+from docling_glm_ocr import GlmOcrRemoteOptions
+from docling_pp_doc_layout.options import PPDocLayoutV3Options
+
+pipeline_options = PdfPipelineOptions(
+    allow_external_plugins=True,
+    ocr_options=GlmOcrRemoteOptions(
+        api_url="http://localhost:8001/v1/chat/completions",
+        model_name="zai-org/GLM-OCR",
+    ),
+    layout_options=PPDocLayoutV3Options(),
+)
+
+converter = DocumentConverter(
+    format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
+)
+result = converter.convert("https://arxiv.org/pdf/2501.17887")
+print(result.document.export_to_markdown())
+```
+
+## vLLM GLM-OCR container
+
+Standalone command to run the GLM-OCR vLLM server:
 
 ```bash
 docker run -d \
@@ -112,171 +204,49 @@ docker run -d \
   --ipc=host \
   -p 8001:8000 \
   -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
-  -e "HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}" \
   -e "HF_TOKEN=${HF_TOKEN:-}" \
-  -e "LD_LIBRARY_PATH=/lib/x86_64-linux-gnu" \
   --entrypoint /bin/bash \
   vllm/vllm-openai:cu130-nightly \
-  -c "uv pip install --system --upgrade transformers && exec vllm serve --model zai-org/GLM-OCR --served-model-name zai-org/GLM-OCR --port 8000 --trust-remote-code"
+  -c "uv pip install --system --upgrade transformers && \
+      exec vllm serve zai-org/GLM-OCR \
+        --served-model-name zai-org/GLM-OCR \
+        --port 8000 \
+        --trust-remote-code"
 ```
-
-## Docling integration example
-
-```python
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import VlmConvertOptions, VlmPipelineOptions
-from docling.datamodel.pipeline_options_vlm_model import ResponseFormat
-from docling.datamodel.vlm_engine_options import ApiVlmEngineOptions, VlmEngineType
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.pipeline.vlm_pipeline import VlmPipeline
-
-vlm_options = VlmConvertOptions.from_preset(
-    "granite_docling",
-    engine_options=ApiVlmEngineOptions(
-        runtime_type=VlmEngineType.API,
-        url="http://glm-proxy:3000/v1/chat/completions",
-        params={"model": "glm-ocr", "max_tokens": 16384},
-        timeout=300,
-    ),
-)
-vlm_options.model_spec.response_format = ResponseFormat.MARKDOWN
-
-pipeline_options = VlmPipelineOptions(
-    vlm_options=vlm_options,
-    enable_remote_services=True,
-)
-
-converter = DocumentConverter(
-    format_options={
-        InputFormat.PDF: PdfFormatOption(
-            pipeline_cls=VlmPipeline,
-            pipeline_options=pipeline_options,
-        )
-    }
-)
-```
-
-## API reference
-
-### `GET /healthz`
-
-Liveness probe. Always returns `{"status": "ok"}`.
-
-### `GET /readyz`
-
-Readiness probe. Returns `{"status": "ok"}` once the backend has been initialized.
-
-### `GET /v1/models`
-
-Returns supported model IDs.
-
-### `POST /v1/chat/completions`
-
-OpenAI-compatible chat completion endpoint.
-
-Notes:
-
-- image content must be sent via `image_url.url` as `data:image/<mime>;base64,...`
-- streaming is currently not supported
 
 ## Testing
 
-### Lint and type-check
+### Lint
 
 ```bash
 make check
 ```
 
-Or manually:
+### End-to-end tests
+
+The e2e tests require a running stack (docling-serve + vLLM). They use the
+images in `data/` to validate conversion through both plugins.
 
 ```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run ty check .
-```
-
-### Unit + integration tests
-
-```bash
-make test
-```
-
-Or with coverage:
-
-```bash
-make test-cov
-```
-
-### End-to-end tests (real infrastructure)
-
-Requires a running proxy instance and external vLLM instance.
-
-```bash
-export E2E_PROXY_URL="http://localhost:3000"
+export DOCLING_SERVE_URL=http://localhost:5001
 make test-e2e
 ```
 
-### Load tests
-
-Runs 40 concurrent workers for 5 minutes against a live service:
-
-```bash
-export E2E_PROXY_URL="http://localhost:3000"
-make test-load
-```
+Tests are skipped automatically when `DOCLING_SERVE_URL` is not set.
 
 ## CI/CD
 
 ### CI (`.github/workflows/ci.yml`)
 
-Runs on push/PR:
+Runs on push/PR: lint with ruff.
 
-- lint (`ruff`)
-- type-check (`ty`)
-- unit + integration tests with coverage
+### Docker image (`.github/workflows/docling-serve.yml`)
 
-### CD (`.github/workflows/cd.yml`)
+Builds and pushes the patched docling-serve image to GHCR. Triggered on:
 
-Runs on version tags (`v*`):
+- Push to `main` when files in `plugins/` change
+- Manual dispatch (with configurable upstream tag)
 
-- builds Bento
-- containerizes with BentoML
-- scans image with Trivy (fails on CRITICAL/HIGH vulnerabilities)
-- pushes image to `ghcr.io/<owner>/<repo>:<tag>` and `:latest`
+## License
 
-## Docker Compose
-
-A `compose.yaml` is provided with three services: **vllm-glm-ocr**, **bentoml-ocr**, and **docling-serve**.
-
-```bash
-make docker-up    # start all services
-make docker-down  # stop all services
-```
-
-See `.env.example` for Docker Compose-specific settings (ports, image tags, HF token).
-
-## Kubernetes deployment
-
-Kustomize manifests are provided in the `deploy/` directory (Deployment, Service, HPA, PDB, NetworkPolicy).
-
-## Build and run container
-
-```bash
-uv sync
-uv run bentoml build
-uv run bentoml containerize glm-ocr-proxy:latest
-docker run --gpus all -p 3000:3000 \
-  -e VLLM_API_URL="http://vllm-host:8080/v1/chat/completions" \
-  -e VLLM_MODEL_NAME="zai-org/GLM-OCR" \
-  glm-ocr-proxy:latest
-```
-
-## Pull from GHCR
-
-```bash
-docker pull ghcr.io/<owner>/<repo>:latest
-docker run --gpus all -p 3000:3000 \
-  -e VLLM_API_URL="http://vllm-host:8080/v1/chat/completions" \
-  -e VLLM_MODEL_NAME="zai-org/GLM-OCR" \
-  ghcr.io/<owner>/<repo>:latest
-```
+MIT

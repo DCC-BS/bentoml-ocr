@@ -14,17 +14,17 @@ services:
     entrypoint: /bin/bash
     command: >-
       -c "uv pip install --system --upgrade transformers &&
-          exec vllm serve
-            --model zai-org/GLM-OCR
-            --served-model-name zai-org/GLM-OCR
-            --port 8000
-            --trust-remote-code"
+      exec vllm serve
+      --model zai-org/GLM-OCR
+      --served-model-name zai-org/GLM-OCR
+      --port 8000
+      --trust-remote-code
+      --limit-mm-per-prompt image=8192"
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
               device_ids: ["1"]
               capabilities: [gpu]
     healthcheck:
@@ -35,19 +35,17 @@ services:
       start_period: 180s
     restart: unless-stopped
 
-  # ── BentoML GLM-OCR proxy (layout + OCR → OpenAI-compatible API) ─────
-  bentoml-ocr:
-    image: ghcr.io/dcc-bs/bentoml-ocr:${BENTOML_OCR_TAG:-latest}
+  # ── Docling API server with UI ────────────────────────────────────────
+  docling-serve:
+    image: ghcr.io/dcc-bs/bentoml-ocr-docling-serve:${DOCLING_SERVE_TAG:-latest}
     ports:
-      - "${BENTOML_HOST_PORT:-3000}:3000"
+      - "${DOCLING_HOST_PORT:-5001}:5001"
     environment:
-      VLLM_API_URL: http://vllm-glm-ocr:8000/v1/chat/completions
-      VLLM_MODEL_NAME: zai-org/GLM-OCR
-      IS_PROD: "${IS_PROD:-true}"
-      GLMOCR_ENABLE_LAYOUT: "${GLMOCR_ENABLE_LAYOUT:-true}"
-      GLMOCR_REQUEST_TIMEOUT_SECONDS: "${GLMOCR_REQUEST_TIMEOUT_SECONDS:-300}"
-      GLMOCR_MAX_WORKERS: "${GLMOCR_MAX_WORKERS:-16}"
-      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      DOCLING_SERVE_ENABLE_UI: "true"
+      DOCLING_SERVE_ENABLE_REMOTE_SERVICES: "true"
+      DOCLING_SERVE_ALLOW_EXTERNAL_PLUGINS: "true"
+      DOCLING_SERVE_LOG_LEVEL: "${DOCLING_SERVE_LOG_LEVEL:-INFO}"
+      GLMOCR_REMOTE_OCR_API_URL: http://vllm-glm-ocr:8000/v1/chat/completions
     depends_on:
       vllm-glm-ocr:
         condition: service_healthy
@@ -56,39 +54,6 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
               device_ids: ["0"]
               capabilities: [gpu]
-    restart: unless-stopped
-
-  # ── Docling API server with UI ────────────────────────────────────────
-  # VLM pipeline and OCR engine are configured per-request (see README).
-  #
-  # Example: convert a PDF using the BentoML proxy as VLM pipeline
-  #   curl -X POST http://localhost:5001/v1/convert/source \
-  #     -H 'Content-Type: application/json' \
-  #     -d '{
-  #       "options": {
-  #         "pipeline": "vlm",
-  #         "vlm_pipeline_model_api": {
-  #           "url": "http://bentoml-ocr:3000/v1/chat/completions",
-  #           "params": {"model": "glm-ocr", "max_completion_tokens": 16384},
-  #           "timeout": 300,
-  #           "concurrency": 4,
-  #           "response_format": "markdown"
-  #         }
-  #       },
-  #       "http_sources": [{"url": "https://arxiv.org/pdf/2501.17887"}]
-  #     }'
-  docling-serve:
-    image: ghcr.io/docling-project/docling-serve:${DOCLING_SERVE_TAG:-latest}
-    ports:
-      - "${DOCLING_HOST_PORT:-5001}:5001"
-    environment:
-      DOCLING_SERVE_ENABLE_UI: "true"
-      DOCLING_SERVE_ENABLE_REMOTE_SERVICES: "true"
-      DOCLING_SERVE_ALLOW_EXTERNAL_PLUGINS: "true"
-      DOCLING_SERVE_LOG_LEVEL: "${DOCLING_SERVE_LOG_LEVEL:-INFO}"
-    depends_on:
-      - bentoml-ocr
     restart: unless-stopped
