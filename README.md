@@ -109,7 +109,36 @@ To build the patched docling-serve image from source:
 make docker-build
 ```
 
-This runs `docker build` against `plugins/Dockerfile.docling-serve`.
+This runs `docker build` against `plugins/Dockerfile.docling-serve` and tags the
+result as `docling-serve-plugins:latest`.
+
+#### Running the locally built image
+
+To test the local image without pushing it to GHCR, use the compose stack but
+override the image name via `DOCLING_SERVE_TAG` and a matching tag alias, or run
+`docling-serve` directly with `docker run`:
+
+```bash
+docker run --rm \
+  --gpus device=0 \
+  -p 5001:5001 \
+  -e DOCLING_SERVE_ENABLE_UI=true \
+  -e DOCLING_SERVE_ENABLE_REMOTE_SERVICES=true \
+  -e DOCLING_SERVE_ALLOW_EXTERNAL_PLUGINS=true \
+  -e GLMOCR_REMOTE_OCR_API_URL=http://host.docker.internal:8001/v1/chat/completions \
+  docling-serve-plugins:latest
+```
+
+The Gradio UI is then available at http://localhost:5001.
+
+Alternatively, re-tag the local image to match the compose service name and use
+the normal `make docker-up` flow:
+
+```bash
+make docker-build
+docker tag docling-serve-plugins:latest ghcr.io/dcc-bs/bentoml-ocr-docling-serve:latest
+make docker-up
+```
 
 ## Plugin configuration
 

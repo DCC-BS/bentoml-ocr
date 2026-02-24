@@ -18,7 +18,8 @@ services:
       --model zai-org/GLM-OCR
       --served-model-name zai-org/GLM-OCR
       --port 8000
-      --trust-remote-code"
+      --trust-remote-code
+      --limit-mm-per-prompt image=8192"
     deploy:
       resources:
         reservations:
