@@ -1,6 +1,6 @@
 # Docling-Serve Plugins: PP-DocLayout-V3 + GLM-OCR
 
-[![CI](https://github.com/DCC-BS/bentoml-ocr/actions/workflows/ci.yml/badge.svg)](https://github.com/DCC-BS/bentoml-ocr/actions/workflows/ci.yml)
+[![CI](https://github.com/DCC-BS/dcc-docling-serve/actions/workflows/ci.yml/badge.svg)](https://github.com/DCC-BS/dcc-docling-serve/actions/workflows/ci.yml)
 
 A patched [docling-serve](https://github.com/docling-project/docling-serve) Docker
 image that bundles two community plugins:
@@ -86,13 +86,13 @@ curl -X POST http://localhost:5001/v1/convert/source \
 The `compose.yaml` references the pre-built image from GHCR:
 
 ```
-ghcr.io/dcc-bs/bentoml-ocr-docling-serve:latest
+ghcr.io/dcc-bs/dcc-docling-serve:latest
 ```
 
 | Service | Image |
 | --- | --- |
 | **vllm-glm-ocr** | `vllm/vllm-openai:cu130-nightly` |
-| **docling-serve** | `ghcr.io/dcc-bs/bentoml-ocr-docling-serve:latest` |
+| **docling-serve** | `ghcr.io/dcc-bs/dcc-docling-serve:latest` |
 
 Environment variables are documented in `.env.example`.
 
@@ -136,7 +136,7 @@ the normal `make docker-up` flow:
 
 ```bash
 make docker-build
-docker tag docling-serve-plugins:latest ghcr.io/dcc-bs/bentoml-ocr-docling-serve:latest
+docker tag docling-serve-plugins:latest ghcr.io/dcc-bs/dcc-docling-serve:latest
 make docker-up
 ```
 

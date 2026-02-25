@@ -37,7 +37,7 @@ services:
 
   # ── Docling API server with UI ────────────────────────────────────────
   docling-serve:
-    image: ghcr.io/dcc-bs/bentoml-ocr-docling-serve:${DOCLING_SERVE_TAG:-latest}
+    image: ghcr.io/dcc-bs/dcc-docling-serve:${DOCLING_SERVE_TAG:-latest}
     ports:
       - "${DOCLING_HOST_PORT:-5001}:5001"
     environment:
