@@ -25,7 +25,7 @@ test-e2e: ## Run end-to-end tests (requires DOCLING_SERVE_URL)
 .PHONY: docker-build
 docker-build: ## Build the patched docling-serve image locally
 	@echo "🐳 Building docling-serve image"
-	@docker build -t docling-serve-plugins:latest -f plugins/Dockerfile.docling-serve plugins/
+	@docker build --no-cache  -t docling-serve-plugins:latest -f plugins/Dockerfile.docling-serve plugins/
 
 .PHONY: docker-up
 docker-up: ## Start the Docker Compose stack
