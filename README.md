@@ -21,12 +21,9 @@ The patched Gradio UI also exposes both engines as selectable options.
 
 ```mermaid
 flowchart TD
-    subgraph doclingServe ["docling-serve (patched image)"]
-        STD["Standard pipeline"]
+    subgraph doclingServe ["dcc-docling-serve"]
         LP["PP-DocLayout-V3 plugin"]
         OP["GLM-OCR plugin"]
-        STD --> LP
-        STD --> OP
     end
 
     subgraph vllmServer [vLLM Server]
@@ -51,6 +48,15 @@ Copy `.env.example` to `.env` and set the required variables:
 cp .env.example .env
 # edit .env — at minimum set HF_TOKEN
 ```
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `HF_TOKEN` | HuggingFace token for downloading GLM-OCR (required) | — |
+| `HF_CACHE_DIR` | Host directory for the HF model cache | `.hf-cache` |
+| `VLLM_HOST_PORT` | Host port for the vLLM server | `8001` |
+| `DOCLING_HOST_PORT` | Host port for docling-serve | `5001` |
+| `DOCLING_SERVE_TAG` | Upstream docling-serve image tag | `latest` |
+| `DOCLING_SERVE_LOG_LEVEL` | Log level for docling-serve | `INFO` |
 
 ### 3) Start the stack
 
@@ -218,10 +224,36 @@ docker run -d \
 
 ## Testing
 
-### Lint
+### Setup (dev)
+
+```bash
+make install
+```
+
+### Format and lint
 
 ```bash
 make check
+```
+
+Runs `ruff format` (auto-format) and `ruff check --fix` (auto-fix lint errors) locally.
+The CI workflow runs these as read-only checks.
+
+### Unit tests
+
+```bash
+make test
+```
+
+### Smoke test (local SDK)
+
+Tests the plugins directly via the Python SDK, without a running docling-serve instance.
+Requires the plugin repos checked out as siblings of this repo:
+
+```bash
+./smoke_test.sh
+# or with a custom vLLM URL:
+GLMOCR_REMOTE_OCR_API_URL=http://host:8001/v1/chat/completions ./smoke_test.sh
 ```
 
 ### End-to-end tests
