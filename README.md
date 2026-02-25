@@ -119,7 +119,7 @@ override the image name via `DOCLING_SERVE_TAG` and a matching tag alias, or run
 `docling-serve` directly with `docker run`:
 
 ```bash
-docker run --rm \
+docker run --add-host=host.docker.internal:host-gateway --rm \
   --gpus device=0 \
   -p 5001:5001 \
   -e DOCLING_SERVE_ENABLE_UI=true \
@@ -146,15 +146,17 @@ make docker-up
 
 | Option | Description | Default |
 | --- | --- | --- |
-| `api_url` | vLLM chat completion URL | `GLMOCR_REMOTE_OCR_API_URL` env or `http://localhost:8001/v1/chat/completions` |
-| `model_name` | Model name sent to vLLM | `zai-org/GLM-OCR` |
-| `prompt` | Text prompt for each crop | `GLMOCR_REMOTE_OCR_PROMPT` env or default prompt |
-| `timeout` | HTTP timeout per crop (seconds) | `120` |
-| `max_tokens` | Max tokens per completion | `16384` |
-| `scale` | Image crop rendering scale | `3.0` |
-| `max_concurrent_requests` | Max concurrent API requests | `10` |
-| `max_retries` | Max retry attempts for HTTP errors | `3` |
-| `retry_backoff_factor` | Exponential backoff factor | `2.0` |
+| `api_url` | OpenAI-compatible chat completion URL of the vLLM server | `GLMOCR_REMOTE_OCR_API_URL` env or `http://localhost:8001/v1/chat/completions` |
+| `model_name` | `model` parameter sent in the chat completion request | `zai-org/GLM-OCR` |
+| `lang` | List of language codes (passed to the base OCR options) | `["en"]` |
+| `prompt` | Text prompt sent alongside each image crop | `GLMOCR_REMOTE_OCR_PROMPT` env or default prompt |
+| `timeout` | HTTP request timeout in seconds per crop | `120` |
+| `max_tokens` | Maximum tokens for the chat completion response | `16384` |
+| `scale` | Render scale applied to each crop before encoding | `3.0` |
+| `max_image_pixels` | Pixel budget per crop; scale is reduced automatically when exceeded | `4500000` |
+| `max_concurrent_requests` | Number of worker threads (concurrent HTTP requests) per page | `10` |
+| `max_retries` | Max retry attempts for 5xx or network errors | `3` |
+| `retry_backoff_factor` | Exponential back-off multiplier between retries (delay = `factor^n` s) | `2.0` |
 
 ### PP-DocLayout-V3 layout
 
