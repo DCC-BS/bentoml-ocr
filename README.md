@@ -1,6 +1,6 @@
 # Docling-Serve Plugins: PP-DocLayout-V3 + GLM-OCR
 
-[![CI](https://github.com/DCC-BS/bentoml-ocr/actions/workflows/ci.yml/badge.svg)](https://github.com/DCC-BS/bentoml-ocr/actions/workflows/ci.yml)
+[![CI](https://github.com/DCC-BS/dcc-docling-serve/actions/workflows/ci.yml/badge.svg)](https://github.com/DCC-BS/dcc-docling-serve/actions/workflows/ci.yml)
 
 A patched [docling-serve](https://github.com/docling-project/docling-serve) Docker
 image that bundles two community plugins:
@@ -21,12 +21,9 @@ The patched Gradio UI also exposes both engines as selectable options.
 
 ```mermaid
 flowchart TD
-    subgraph doclingServe ["docling-serve (patched image)"]
-        STD["Standard pipeline"]
+    subgraph doclingServe ["dcc-docling-serve"]
         LP["PP-DocLayout-V3 plugin"]
         OP["GLM-OCR plugin"]
-        STD --> LP
-        STD --> OP
     end
 
     subgraph vllmServer [vLLM Server]
@@ -51,6 +48,15 @@ Copy `.env.example` to `.env` and set the required variables:
 cp .env.example .env
 # edit .env — at minimum set HF_TOKEN
 ```
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `HF_TOKEN` | HuggingFace token for downloading GLM-OCR (required) | — |
+| `HF_CACHE_DIR` | Host directory for the HF model cache | `.hf-cache` |
+| `VLLM_HOST_PORT` | Host port for the vLLM server | `8001` |
+| `DOCLING_HOST_PORT` | Host port for docling-serve | `5001` |
+| `DOCLING_SERVE_TAG` | Upstream docling-serve image tag | `latest` |
+| `DOCLING_SERVE_LOG_LEVEL` | Log level for docling-serve | `INFO` |
 
 ### 3) Start the stack
 
@@ -86,13 +92,13 @@ curl -X POST http://localhost:5001/v1/convert/source \
 The `compose.yaml` references the pre-built image from GHCR:
 
 ```
-ghcr.io/dcc-bs/bentoml-ocr-docling-serve:latest
+ghcr.io/dcc-bs/dcc-docling-serve:latest
 ```
 
 | Service | Image |
 | --- | --- |
 | **vllm-glm-ocr** | `vllm/vllm-openai:cu130-nightly` |
-| **docling-serve** | `ghcr.io/dcc-bs/bentoml-ocr-docling-serve:latest` |
+| **docling-serve** | `ghcr.io/dcc-bs/dcc-docling-serve:latest` |
 
 Environment variables are documented in `.env.example`.
 
@@ -119,7 +125,7 @@ override the image name via `DOCLING_SERVE_TAG` and a matching tag alias, or run
 `docling-serve` directly with `docker run`:
 
 ```bash
-docker run --rm \
+docker run --add-host=host.docker.internal:host-gateway --rm \
   --gpus device=0 \
   -p 5001:5001 \
   -e DOCLING_SERVE_ENABLE_UI=true \
@@ -136,7 +142,7 @@ the normal `make docker-up` flow:
 
 ```bash
 make docker-build
-docker tag docling-serve-plugins:latest ghcr.io/dcc-bs/bentoml-ocr-docling-serve:latest
+docker tag docling-serve-plugins:latest ghcr.io/dcc-bs/dcc-docling-serve:latest
 make docker-up
 ```
 
@@ -146,15 +152,17 @@ make docker-up
 
 | Option | Description | Default |
 | --- | --- | --- |
-| `api_url` | vLLM chat completion URL | `GLMOCR_REMOTE_OCR_API_URL` env or `http://localhost:8001/v1/chat/completions` |
-| `model_name` | Model name sent to vLLM | `zai-org/GLM-OCR` |
-| `prompt` | Text prompt for each crop | `GLMOCR_REMOTE_OCR_PROMPT` env or default prompt |
-| `timeout` | HTTP timeout per crop (seconds) | `120` |
-| `max_tokens` | Max tokens per completion | `16384` |
-| `scale` | Image crop rendering scale | `3.0` |
-| `max_concurrent_requests` | Max concurrent API requests | `10` |
-| `max_retries` | Max retry attempts for HTTP errors | `3` |
-| `retry_backoff_factor` | Exponential backoff factor | `2.0` |
+| `api_url` | OpenAI-compatible chat completion URL of the vLLM server | `GLMOCR_REMOTE_OCR_API_URL` env or `http://localhost:8001/v1/chat/completions` |
+| `model_name` | `model` parameter sent in the chat completion request | `zai-org/GLM-OCR` |
+| `lang` | List of language codes (passed to the base OCR options) | `["en"]` |
+| `prompt` | Text prompt sent alongside each image crop | `GLMOCR_REMOTE_OCR_PROMPT` env or default prompt |
+| `timeout` | HTTP request timeout in seconds per crop | `120` |
+| `max_tokens` | Maximum tokens for the chat completion response | `16384` |
+| `scale` | Render scale applied to each crop before encoding | `3.0` |
+| `max_image_pixels` | Pixel budget per crop; scale is reduced automatically when exceeded | `4500000` |
+| `max_concurrent_requests` | Number of worker threads (concurrent HTTP requests) per page | `10` |
+| `max_retries` | Max retry attempts for 5xx or network errors | `3` |
+| `retry_backoff_factor` | Exponential back-off multiplier between retries (delay = `factor^n` s) | `2.0` |
 
 ### PP-DocLayout-V3 layout
 
@@ -216,10 +224,36 @@ docker run -d \
 
 ## Testing
 
-### Lint
+### Setup (dev)
+
+```bash
+make install
+```
+
+### Format and lint
 
 ```bash
 make check
+```
+
+Runs `ruff format` (auto-format) and `ruff check --fix` (auto-fix lint errors) locally.
+The CI workflow runs these as read-only checks.
+
+### Unit tests
+
+```bash
+make test
+```
+
+### Smoke test (local SDK)
+
+Tests the plugins directly via the Python SDK, without a running docling-serve instance.
+Requires the plugin repos checked out as siblings of this repo:
+
+```bash
+./smoke_test.sh
+# or with a custom vLLM URL:
+GLMOCR_REMOTE_OCR_API_URL=http://host:8001/v1/chat/completions ./smoke_test.sh
 ```
 
 ### End-to-end tests
