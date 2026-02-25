@@ -29,18 +29,22 @@ jobs:
             upstream_image: ghcr.io/docling-project/docling-serve
             platforms: linux/amd64,linux/arm64
             cache_scope: base
+            default_tag: latest
           - suffix: -cpu
             upstream_image: ghcr.io/docling-project/docling-serve-cpu
             platforms: linux/amd64,linux/arm64
             cache_scope: cpu
+            default_tag: latest
           - suffix: -cu128
             upstream_image: ghcr.io/docling-project/docling-serve-cu128
             platforms: linux/amd64
             cache_scope: cu128
+            default_tag: main
           - suffix: -cu130
             upstream_image: ghcr.io/docling-project/docling-serve-cu130
             platforms: linux/amd64,linux/arm64
             cache_scope: cu130
+            default_tag: main
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -63,7 +67,7 @@ jobs:
 
       - name: Determine tag
         id: tag
-        run: echo "value=${{ inputs.docling_serve_tag || 'latest' }}" >> "$GITHUB_OUTPUT"
+        run: echo "value=${{ inputs.docling_serve_tag || matrix.variant.default_tag }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@ee4ca427a2f43b6a16632044ca514c076267da23 # v6.19.0
