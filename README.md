@@ -161,29 +161,48 @@ make docker-up
 
 ## Plugin configuration
 
-### GLM-OCR remote OCR
+Both plugins are fully configurable via environment variables, making them
+suitable for zero-code deployment in Docker / Compose environments.
+Explicit `GlmOcrRemoteOptions` / `PPDocLayoutV3Options` constructor arguments
+always take precedence when using the Python SDK directly.
 
-| Option | Description | Default |
+### GLM-OCR remote OCR — environment variables
+
+| Variable | Description | Default |
 | --- | --- | --- |
-| `api_url` | OpenAI-compatible chat completion URL of the vLLM server | `GLMOCR_REMOTE_OCR_API_URL` env or `http://localhost:8001/v1/chat/completions` |
-| `model_name` | `model` parameter sent in the chat completion request | `zai-org/GLM-OCR` |
-| `lang` | List of language codes (passed to the base OCR options) | `["en"]` |
-| `prompt` | Text prompt sent alongside each image crop | `GLMOCR_REMOTE_OCR_PROMPT` env or default prompt |
-| `timeout` | HTTP request timeout in seconds per crop | `120` |
-| `max_tokens` | Maximum tokens for the chat completion response | `16384` |
-| `scale` | Render scale applied to each crop before encoding | `3.0` |
-| `max_image_pixels` | Pixel budget per crop; scale is reduced automatically when exceeded | `4500000` |
-| `max_concurrent_requests` | Number of worker threads (concurrent HTTP requests) per page | `10` |
-| `max_retries` | Max retry attempts for 5xx or network errors | `3` |
-| `retry_backoff_factor` | Exponential back-off multiplier between retries (delay = `factor^n` s) | `2.0` |
+| `GLMOCR_REMOTE_OCR_API_URL` | vLLM chat completion URL | `http://localhost:8001/v1/chat/completions` |
+| `GLMOCR_REMOTE_OCR_MODEL_NAME` | Model name sent to vLLM | `zai-org/GLM-OCR` |
+| `GLMOCR_REMOTE_OCR_PROMPT` | Text prompt sent with each image crop | built-in default |
+| `GLMOCR_REMOTE_OCR_TIMEOUT` | HTTP timeout per crop (seconds) | `120` |
+| `GLMOCR_REMOTE_OCR_MAX_TOKENS` | Max tokens per completion | `16384` |
+| `GLMOCR_REMOTE_OCR_SCALE` | Image crop rendering scale | `3.0` |
+| `GLMOCR_REMOTE_OCR_MAX_IMAGE_PIXELS` | Pixel budget per crop | `4500000` |
+| `GLMOCR_REMOTE_OCR_MAX_CONCURRENT_REQUESTS` | Max concurrent API requests | `10` |
+| `GLMOCR_REMOTE_OCR_MAX_RETRIES` | Max retry attempts for HTTP errors | `3` |
+| `GLMOCR_REMOTE_OCR_RETRY_BACKOFF_FACTOR` | Exponential backoff factor for retries | `2.0` |
+| `GLMOCR_REMOTE_OCR_LANG` | Comma-separated language hint(s) | `en` |
 
-### PP-DocLayout-V3 layout
+### PP-DocLayout-V3 layout — environment variables
 
-| Option | Description | Default |
+| Variable | Description | Default |
 | --- | --- | --- |
-| `model_name` | HuggingFace model repo ID | `PaddlePaddle/PP-DocLayoutV3_safetensors` |
-| `confidence_threshold` | Minimum detection confidence (0-1) | `0.5` |
-| `batch_size` | Batch size for layout inference | `8` |
+| `PP_DOC_LAYOUT_MODEL_NAME` | HuggingFace model repo ID | `PaddlePaddle/PP-DocLayoutV3_safetensors` |
+| `PP_DOC_LAYOUT_CONFIDENCE_THRESHOLD` | Minimum detection confidence (0.0–1.0) | `0.5` |
+| `PP_DOC_LAYOUT_BATCH_SIZE` | Batch size for layout inference | `8` |
+| `PP_DOC_LAYOUT_CREATE_ORPHAN_CLUSTERS` | Create clusters for orphaned elements (`true`/`false`) | `true` |
+| `PP_DOC_LAYOUT_KEEP_EMPTY_CLUSTERS` | Retain empty clusters in results (`true`/`false`) | `false` |
+| `PP_DOC_LAYOUT_SKIP_CELL_ASSIGNMENT` | Skip table-cell assignment (`true`/`false`) | `false` |
+
+Boolean variables accept `true`, `1`, `yes` (case-insensitive) as truthy; anything else is `false`.
+
+### SDK option reference
+
+All environment variables above correspond to fields on `GlmOcrRemoteOptions`
+and `PPDocLayoutV3Options`.  See the individual plugin READMEs for the full
+option reference:
+
+- [`docling-glm-ocr` README](https://github.com/DCC-BS/docling-glm-ocr#configuration)
+- [`docling-pp-doc-layout` README](https://github.com/DCC-BS/docling-pp-doc-layout#configuration-options)
 
 ## Python SDK usage
 
