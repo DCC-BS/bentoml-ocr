@@ -5,6 +5,19 @@
 A patched [docling-serve](https://github.com/docling-project/docling-serve) Docker
 image that bundles two community plugins:
 
+## Available images
+
+| Image | Based on | Architectures | Notes |
+| --- | --- | --- | --- |
+| `ghcr.io/dcc-bs/dcc-docling-serve` | `docling-serve` | linux/amd64, linux/arm64 | Base image, packages from PyPI |
+| `ghcr.io/dcc-bs/dcc-docling-serve-cpu` | `docling-serve-cpu` | linux/amd64, linux/arm64 | CPU-only, torch from PyTorch CPU index |
+| `ghcr.io/dcc-bs/dcc-docling-serve-cu128` | `docling-serve-cu128` | linux/amd64 | CUDA 12.8, torch from cu128 index |
+| `ghcr.io/dcc-bs/dcc-docling-serve-cu130` | `docling-serve-cu130` | linux/amd64, linux/arm64 | CUDA 13.0, torch from cu130 index |
+
+Each image is tagged with the upstream docling-serve version (e.g. `v2.3.0`) and `:latest`.
+
+## Plugins
+
 | Plugin | PyPI | Purpose |
 | --- | --- | --- |
 | [docling-glm-ocr](https://github.com/DCC-BS/docling-glm-ocr) | `pip install docling-glm-ocr` | Remote OCR via a vLLM-hosted GLM-OCR model |

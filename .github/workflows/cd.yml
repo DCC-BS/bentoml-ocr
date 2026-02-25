@@ -22,6 +22,25 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        variant:
+          - suffix: ""
+            upstream_image: ghcr.io/docling-project/docling-serve
+            platforms: linux/amd64,linux/arm64
+            cache_scope: base
+          - suffix: -cpu
+            upstream_image: ghcr.io/docling-project/docling-serve-cpu
+            platforms: linux/amd64,linux/arm64
+            cache_scope: cpu
+          - suffix: -cu128
+            upstream_image: ghcr.io/docling-project/docling-serve-cu128
+            platforms: linux/amd64
+            cache_scope: cu128
+          - suffix: -cu130
+            upstream_image: ghcr.io/docling-project/docling-serve-cu130
+            platforms: linux/amd64,linux/arm64
+            cache_scope: cu130
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -33,11 +52,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Lowercase image name
-        run: echo "IMAGE_NAME=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+        run: echo "IMAGE_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - name: Determine tag
         id: tag
@@ -49,10 +71,12 @@ jobs:
           context: plugins
           file: plugins/Dockerfile.docling-serve
           build-args: |
+            DOCLING_SERVE_IMAGE=${{ matrix.variant.upstream_image }}
             DOCLING_SERVE_TAG=${{ steps.tag.outputs.value }}
+          platforms: ${{ matrix.variant.platforms }}
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.variant.suffix }}:${{ steps.tag.outputs.value }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.variant.suffix }}:latest
+          cache-from: type=gha,scope=${{ matrix.variant.cache_scope }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant.cache_scope }}
