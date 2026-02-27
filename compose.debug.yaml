@@ -1,0 +1,19 @@
+# compose.debug.yaml — override that builds docling-serve from local plugin sources.
+#
+# Combine with compose.yaml so vllm-glm-ocr stays unchanged:
+#
+#   docker compose -f compose.yaml -f compose.debug.yaml build --no-cache
+#   docker compose -f compose.yaml -f compose.debug.yaml up
+#
+# The build context is the repo root so Dockerfile.debug can COPY from
+# docling-glm-ocr/ and docling-pp-doc-layout/ (sibling dirs of dcc-docling-serve/).
+
+services:
+  docling-serve:
+    image: dcc-docling-serve-debug:local
+    build:
+      context: ..
+      dockerfile: dcc-docling-serve/plugins/Dockerfile.debug
+      args:
+        DOCLING_SERVE_IMAGE: ghcr.io/docling-project/docling-serve
+        DOCLING_SERVE_TAG: latest
