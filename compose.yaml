@@ -1,7 +1,7 @@
 services:
   # ── vLLM serving GLM-OCR ──────────────────────────────────────────────
   vllm-glm-ocr:
-    image: vllm/vllm-openai:cu130-nightly
+    image: ghcr.io/dcc-bs/vllm:v0.16.0-cu130
     ipc: host
     ports:
       - "${VLLM_HOST_PORT:-8001}:8000"
@@ -11,14 +11,14 @@ services:
       HUGGING_FACE_HUB_TOKEN: "${HUGGING_FACE_HUB_TOKEN:-}"
       HF_TOKEN: "${HF_TOKEN:-}"
       LD_LIBRARY_PATH: /lib/x86_64-linux-gnu
-    entrypoint: /bin/bash
-    command: >-
-      -c "uv pip install --system --upgrade transformers &&
-      exec vllm serve
-      --model zai-org/GLM-OCR
-      --served-model-name zai-org/GLM-OCR
-      --port 8000
-      --trust-remote-code"
+    command:
+      - --model
+      - zai-org/GLM-OCR
+      - --served-model-name
+      - zai-org/GLM-OCR
+      - --port
+      - "8000"
+      - --trust-remote-code
     deploy:
       resources:
         reservations:

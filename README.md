@@ -110,7 +110,7 @@ ghcr.io/dcc-bs/dcc-docling-serve:latest
 
 | Service | Image |
 | --- | --- |
-| **vllm-glm-ocr** | `vllm/vllm-openai:cu130-nightly` |
+| **vllm-glm-ocr** | `ghcr.io/dcc-bs/vllm:v0.16.0-cu130` |
 | **docling-serve** | `ghcr.io/dcc-bs/dcc-docling-serve:latest` |
 
 Environment variables are documented in `.env.example`.
@@ -245,13 +245,12 @@ docker run -d \
   -p 8001:8000 \
   -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
   -e "HF_TOKEN=${HF_TOKEN:-}" \
-  --entrypoint /bin/bash \
-  vllm/vllm-openai:cu130-nightly \
-  -c "uv pip install --system --upgrade transformers && \
-      exec vllm serve zai-org/GLM-OCR \
-        --served-model-name zai-org/GLM-OCR \
-        --port 8000 \
-        --trust-remote-code"
+  -e "LD_LIBRARY_PATH=/lib/x86_64-linux-gnu" \
+  ghcr.io/dcc-bs/vllm:v0.16.0-cu130 \
+  zai-org/GLM-OCR \
+  --served-model-name zai-org/GLM-OCR \
+  --port 8000 \
+  --trust-remote-code
 ```
 
 ## Testing
