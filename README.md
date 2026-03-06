@@ -181,6 +181,7 @@ always take precedence when using the Python SDK directly.
 | `GLMOCR_REMOTE_OCR_MAX_RETRIES` | Max retry attempts for HTTP errors | `3` |
 | `GLMOCR_REMOTE_OCR_RETRY_BACKOFF_FACTOR` | Exponential backoff factor for retries | `2.0` |
 | `GLMOCR_REMOTE_OCR_LANG` | Comma-separated language hint(s) | `en` |
+| `GLMOCR_REMOTE_OCR_API_KEY` | Bearer token for `Authorization` header | unset (no header sent) |
 
 ### PP-DocLayout-V3 layout — environment variables
 
