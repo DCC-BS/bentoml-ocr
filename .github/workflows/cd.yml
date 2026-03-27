@@ -70,7 +70,7 @@ jobs:
         run: echo "value=${{ inputs.docling_serve_tag || matrix.variant.default_tag }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
-        uses: docker/build-push-action@814649735835a84a3d0d6c8d6e6db87dfeb8b348 # v6.19.2
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
           context: plugins
           file: plugins/Dockerfile.docling-serve
