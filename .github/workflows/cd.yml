@@ -50,7 +50,7 @@ jobs:
         uses: actions/checkout@814649735835a84a3d0d6c8d6e6db87dfeb8b348 # v6.0.2
 
       - name: Login to GHCR
-        uses: docker/login-action@814649735835a84a3d0d6c8d6e6db87dfeb8b348 # v3.7.0
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
