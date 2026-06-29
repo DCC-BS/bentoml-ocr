@@ -27,24 +27,28 @@ jobs:
         variant:
           - suffix: ""
             upstream_image: ghcr.io/docling-project/docling-serve
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64
             cache_scope: base
             default_tag: latest
+            onnxruntime_package: "onnxruntime-gpu>=1.17"
           - suffix: -cpu
             upstream_image: ghcr.io/docling-project/docling-serve-cpu
             platforms: linux/amd64,linux/arm64
             cache_scope: cpu
             default_tag: latest
+            onnxruntime_package: "onnxruntime>=1.17"
           - suffix: -cu128
             upstream_image: ghcr.io/docling-project/docling-serve-cu128
             platforms: linux/amd64
             cache_scope: cu128
             default_tag: main
+            onnxruntime_package: "onnxruntime-gpu>=1.17"
           - suffix: -cu130
             upstream_image: ghcr.io/docling-project/docling-serve-cu130
-            platforms: linux/amd64,linux/arm64
+            platforms: linux/amd64
             cache_scope: cu130
             default_tag: main
+            onnxruntime_package: "onnxruntime-gpu>=1.17"
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -77,6 +81,7 @@ jobs:
           build-args: |
             DOCLING_SERVE_IMAGE=${{ matrix.variant.upstream_image }}
             DOCLING_SERVE_TAG=${{ steps.tag.outputs.value }}
+            ONNXRUNTIME_PACKAGE=${{ matrix.variant.onnxruntime_package }}
           platforms: ${{ matrix.variant.platforms }}
           push: true
           tags: |
