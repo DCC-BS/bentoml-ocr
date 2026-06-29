@@ -17,3 +17,5 @@ services:
       args:
         DOCLING_SERVE_IMAGE: ghcr.io/docling-project/docling-serve
         DOCLING_SERVE_TAG: latest
+        # use "onnxruntime>=1.17" for a CPU-only base image
+        ONNXRUNTIME_PACKAGE: "onnxruntime-gpu>=1.17"
