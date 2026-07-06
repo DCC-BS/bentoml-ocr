@@ -1,9 +1,9 @@
-# Docling-Serve Plugins: PP-DocLayout-V3 + GLM-OCR + PP-OCRv6
+# Docling-Serve Plugins: PP-DocLayout-V3 + GLM-OCR
 
 [![CI](https://github.com/DCC-BS/dcc-docling-serve/actions/workflows/ci.yml/badge.svg)](https://github.com/DCC-BS/dcc-docling-serve/actions/workflows/ci.yml)
 
 A patched [docling-serve](https://github.com/docling-project/docling-serve) Docker
-image that bundles three community plugins:
+image that bundles two community plugins:
 
 ## Available images
 
@@ -21,13 +21,12 @@ Each image is tagged with the upstream docling-serve version (e.g. `v2.3.0`) and
 | Plugin | PyPI | Purpose |
 | --- | --- | --- |
 | [docling-glm-ocr](https://github.com/DCC-BS/docling-glm-ocr) | `pip install docling-glm-ocr` | Remote OCR via a vLLM-hosted GLM-OCR model |
-| [docling-pp-ocrv6](https://github.com/DCC-BS/docling-pp-ocrv6) | `pip install docling-pp-ocrv6` | Local OCR via PaddlePaddle's PP-OCRv6 model |
 | [docling-pp-doc-layout](https://github.com/DCC-BS/docling-pp-doc-layout) | `pip install docling-pp-doc-layout` | Local layout detection via PP-DocLayout-V3 |
 
 The plugins are selectable per-request through the standard docling-serve API:
 
 - **Layout** -- `layout_custom_config: { "kind": "ppdoclayout-v3" }`
-- **OCR** -- `ocr_engine: "glm-ocr-remote"` or `ocr_engine: "pp-ocrv6"`
+- **OCR** -- `ocr_engine: "glm-ocr-remote"`
 
 The patched Gradio UI also exposes all engines as selectable options.
 
@@ -38,7 +37,6 @@ flowchart TD
     subgraph doclingServe ["dcc-docling-serve"]
         LP["PP-DocLayout-V3 plugin"]
         OP["GLM-OCR plugin"]
-        PP["PP-OCRv6 plugin"]
     end
 
     subgraph vllmServer [vLLM Server]
@@ -46,7 +44,6 @@ flowchart TD
     end
 
     OP -- "remote OCR" --> GLMOCR
-    %% PP runs locally, using RapidOCR / onnxruntime
 ```
 
 ## Quickstart
@@ -91,21 +88,7 @@ The Gradio UI is available at http://localhost:5001.
 
 ### 4) Convert a document
 
-**Option A: Local PP-OCRv6 OCR**
-
-```bash
-curl -X POST http://localhost:5001/v1/convert/source \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "options": {
-      "ocr_engine": "pp-ocrv6",
-      "layout_custom_config": { "kind": "ppdoclayout-v3" }
-    },
-    "sources": [{"kind": "http", "url": "https://arxiv.org/pdf/2501.17887"}]
-  }'
-```
-
-**Option B: Remote GLM-OCR OCR**
+Remote GLM-OCR OCR with PP-DocLayout-V3 layout:
 
 ```bash
 curl -X POST http://localhost:5001/v1/convert/source \
@@ -182,7 +165,7 @@ make docker-up
 
 All plugins are fully configurable via environment variables, making them
 suitable for zero-code deployment in Docker / Compose environments.
-Explicit `GlmOcrRemoteOptions`, `PPOCRv6Options`, and `PPDocLayoutV3Options` constructor arguments
+Explicit `GlmOcrRemoteOptions` and `PPDocLayoutV3Options` constructor arguments
 always take precedence when using the Python SDK directly.
 
 ### GLM-OCR remote OCR — environment variables
@@ -202,22 +185,6 @@ always take precedence when using the Python SDK directly.
 | `GLMOCR_REMOTE_OCR_LANG` | Comma-separated language hint(s) | `en` |
 | `GLMOCR_REMOTE_OCR_API_KEY` | Bearer token for `Authorization` header | unset (no header sent) |
 
-### PP-OCRv6 local OCR — environment variables
-
-| Variable | Description | Default |
-| --- | --- | --- |
-| `PPOCRV6_LANG` | Language hint list (informational passthrough hint to docling) | `de,en,fr,it,es,nl,pt,pl,sv,da,fi,nb,cs,ro,hu` |
-| `PPOCRV6_TEXT_SCORE` | Minimum recognition confidence threshold (lower scores are dropped) | `0.5` |
-| `PPOCRV6_USE_DET` | Run the text-detection stage (`true`/`false`) | `true` |
-| `PPOCRV6_USE_CLS` | Run the angle-classification stage (`true`/`false`) | `true` |
-| `PPOCRV6_USE_REC` | Run the text-recognition stage (`true`/`false`) | `true` |
-| `PPOCRV6_DET_REPO` | HuggingFace repo ID for detection ONNX model | `PaddlePaddle/PP-OCRv6_medium_det_onnx` |
-| `PPOCRV6_REC_REPO` | HuggingFace repo ID for recognition ONNX model | `PaddlePaddle/PP-OCRv6_medium_rec_onnx` |
-| `PPOCRV6_DET_MODEL_PATH` | Explicit local path to a detection ONNX file | unset |
-| `PPOCRV6_REC_MODEL_PATH` | Explicit local path to a recognition ONNX file | unset |
-| `PPOCRV6_REC_KEYS_PATH` | Explicit local path to recognition dictionary file | unset |
-| `PPOCRV6_CLS_MODEL_PATH` | Explicit local path to classification ONNX file | unset |
-
 ### PP-DocLayout-V3 layout — environment variables
 
 | Variable | Description | Default |
@@ -233,10 +200,9 @@ Boolean variables accept `true`, `1`, `yes` (case-insensitive) as truthy; anythi
 
 ### SDK option reference
 
-All environment variables above correspond to fields on `GlmOcrRemoteOptions`, `PPOCRv6Options`, and `PPDocLayoutV3Options`. See the individual plugin READMEs for the full option reference:
+All environment variables above correspond to fields on `GlmOcrRemoteOptions` and `PPDocLayoutV3Options`. See the individual plugin READMEs for the full option reference:
 
 - [`docling-glm-ocr` README](https://github.com/DCC-BS/docling-glm-ocr#configuration)
-- [`docling-pp-ocrv6` README](https://github.com/DCC-BS/docling-pp-ocrv6#configuration)
 - [`docling-pp-doc-layout` README](https://github.com/DCC-BS/docling-pp-doc-layout#configuration-options)
 
 ## Python SDK usage
@@ -250,11 +216,10 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 
 from docling_glm_ocr import GlmOcrRemoteOptions
 from docling_pp_doc_layout.options import PPDocLayoutV3Options
-from docling_pp_ocrv6.options import PPOCRv6Options
 
 pipeline_options = PdfPipelineOptions(
     allow_external_plugins=True,
-    ocr_options=PPOCRv6Options(),  # or GlmOcrRemoteOptions(api_url="...")
+    ocr_options=GlmOcrRemoteOptions(api_url="..."),
     layout_options=PPDocLayoutV3Options(),
 )
 

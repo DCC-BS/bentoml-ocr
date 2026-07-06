@@ -13,25 +13,17 @@ ARG DOCLING_SERVE_IMAGE=ghcr.io/docling-project/docling-serve
 ARG DOCLING_SERVE_TAG=latest
 FROM ${DOCLING_SERVE_IMAGE}:${DOCLING_SERVE_TAG}
 
-# PP-OCRv6 onnxruntime wheel; override with "onnxruntime>=1.17" for CPU images.
-ARG ONNXRUNTIME_PACKAGE="onnxruntime-gpu>=1.17"
-
 RUN pip install --no-cache-dir "huggingface-hub>=1.3.0" \
-    && pip install --no-cache-dir "transformers>=5.1.0" \
-    && pip install --no-cache-dir "rapidocr>=3.0" "pyyaml>=6.0" \
-    # install the chosen wheel last so it overwrites the CPU onnxruntime rapidocr pulls in
-    && pip install --no-cache-dir --force-reinstall --no-deps "${ONNXRUNTIME_PACKAGE}"
+    && pip install --no-cache-dir "transformers>=5.1.0"
 
 # Copy plugin source trees from the repo root build context
 COPY docling-glm-ocr /src/docling-glm-ocr
 COPY docling-pp-doc-layout /src/docling-pp-doc-layout
-COPY docling-pp-ocrv6 /src/docling-pp-ocrv6
 
 # Install from source — no PyPI lookup
 RUN pip install --no-cache-dir --no-deps \
     /src/docling-glm-ocr \
-    /src/docling-pp-doc-layout \
-    /src/docling-pp-ocrv6
+    /src/docling-pp-doc-layout
 
 # Patch the gradio UI (same as production)
 COPY dcc-docling-serve/plugins/gradio_ui.py /tmp/gradio_ui.py
