@@ -1,7 +1,7 @@
 services:
   # ── vLLM serving GLM-OCR ──────────────────────────────────────────────
   vllm-glm-ocr:
-    image: ghcr.io/dcc-bs/vllm:v0.16.0-cu130
+    image: vllm/vllm-openai:v0.24.0
     ipc: host
     ports:
       - "${VLLM_HOST_PORT:-8001}:8000"

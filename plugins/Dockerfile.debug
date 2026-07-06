@@ -14,7 +14,7 @@ ARG DOCLING_SERVE_TAG=latest
 FROM ${DOCLING_SERVE_IMAGE}:${DOCLING_SERVE_TAG}
 
 RUN pip install --no-cache-dir "huggingface-hub>=1.3.0" \
-    && pip install --no-cache-dir "transformers>=5.1.0"
+    && pip install --no-cache-dir "gradio"
 
 # Copy plugin source trees from the repo root build context
 COPY docling-glm-ocr /src/docling-glm-ocr
