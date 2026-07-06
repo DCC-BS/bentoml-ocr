@@ -232,9 +232,6 @@ def change_ocr_lang(ocr_engine):
         return gr.update(visible=True, value="eng,fra,deu,spa")
     elif ocr_engine == "rapidocr":
         return gr.update(visible=True, value="english,chinese")
-    elif ocr_engine == "pp-ocrv6":
-        # Single multilingual model; lang is an informational hint only.
-        return gr.update(visible=True, value="de,en,fr,it,es,nl,pt")
     elif ocr_engine == "ocrmac":
         return gr.update(visible=True, value="fr-FR,de-DE,es-ES,en-US")
 
@@ -721,7 +718,6 @@ with gr.Blocks(
                     ("EasyOCR", "easyocr"),
                     ("Tesseract", "tesseract"),
                     ("RapidOCR", "rapidocr"),
-                    ("PP-OCRv6", "pp-ocrv6"),
                     ("GLM-OCR (Remote)", "glm-ocr-remote"),
                 ]
                 if sys.platform == "darwin":
