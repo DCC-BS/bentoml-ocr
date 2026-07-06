@@ -4,7 +4,8 @@ FROM ${DOCLING_SERVE_IMAGE}:${DOCLING_SERVE_TAG}
 
 RUN pip install --no-cache-dir "huggingface-hub>=1.3.0" \
     && pip install --no-cache-dir --no-deps docling-glm-ocr docling-pp-doc-layout \
-    && pip install --no-cache-dir "transformers>=5.1.0"
+    && pip install --no-cache-dir "transformers>=5.1.0" \
+    && pip install --no-cache-dir gradio
 
 COPY gradio_ui.py /tmp/gradio_ui.py
 RUN cp /tmp/gradio_ui.py \
