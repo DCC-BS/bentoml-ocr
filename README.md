@@ -205,6 +205,22 @@ All environment variables above correspond to fields on `GlmOcrRemoteOptions` an
 - [`docling-glm-ocr` README](https://github.com/DCC-BS/docling-glm-ocr#configuration)
 - [`docling-pp-doc-layout` README](https://github.com/DCC-BS/docling-pp-doc-layout#configuration-options)
 
+## Health-probe log muting
+
+Kubernetes/Compose liveness probes hitting `GET /health` produce two INFO records
+per probe (`docling_serve.app` "Health check requested" and the matching
+`uvicorn.access` line). The image ships `plugins/mute_health_logs.py`, installed
+into site-packages as `dcc_mute_health_logs.py` plus a `.pth` file that imports
+it at interpreter startup. It attaches `logging.Filter`s to those two loggers —
+no upstream docling-serve file is modified, so it survives upstream updates. The
+filters sit on the `Logger` objects, not on handlers, so docling-serve's own
+`setup_logging()` (which only swaps handlers/levels) does not undo them.
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `DCC_MUTE_HEALTH_LOGS` | Set to `0`/`false`/`no` to disable muting | `1` |
+| `DCC_MUTE_HEALTH_PATHS` | Comma-separated request paths to mute in the access log | `/health` |
+
 ## Python SDK usage
 
 The plugins can also be used directly with the docling Python SDK (without docling-serve). See `examples/convert_with_plugins.py`:

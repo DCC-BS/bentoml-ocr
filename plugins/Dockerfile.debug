@@ -29,3 +29,9 @@ RUN pip install --no-cache-dir --no-deps \
 COPY dcc-docling-serve/plugins/gradio_ui.py /tmp/gradio_ui.py
 RUN cp /tmp/gradio_ui.py \
     "$(python -c 'from pathlib import Path; import docling_serve; print(Path(docling_serve.__file__).parent / "gradio_ui.py")')"
+
+# Mute health-probe log records (same as production)
+COPY dcc-docling-serve/plugins/mute_health_logs.py /tmp/mute_health_logs.py
+RUN SP="$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')" \
+    && cp /tmp/mute_health_logs.py "$SP/dcc_mute_health_logs.py" \
+    && printf 'import dcc_mute_health_logs\n' > "$SP/zz_dcc_mute_health_logs.pth"
