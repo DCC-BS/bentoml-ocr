@@ -239,9 +239,7 @@ pipeline_options = PdfPipelineOptions(
     layout_options=PPDocLayoutV3Options(),
 )
 
-converter = DocumentConverter(
-    format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
-)
+converter = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)})
 result = converter.convert("https://arxiv.org/pdf/2501.17887")
 print(result.document.export_to_markdown())
 ```
