@@ -3,6 +3,11 @@ services:
   vllm-glm-ocr:
     image: vllm/vllm-openai:v0.26.0
     ipc: host
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.local
+        required: false
     ports:
       - "${VLLM_HOST_PORT:-8001}:8000"
     volumes:
@@ -39,12 +44,18 @@ services:
   # ── Docling API server with UI ────────────────────────────────────────
   docling-serve:
     image: ghcr.io/dcc-bs/dcc-docling-serve:${DOCLING_SERVE_TAG:-latest}
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.local
+        required: false
     ports:
       - "${DOCLING_HOST_PORT:-5001}:5001"
     environment:
       DOCLING_SERVE_ENABLE_UI: "true"
       DOCLING_SERVE_ENABLE_REMOTE_SERVICES: "true"
       DOCLING_SERVE_ALLOW_EXTERNAL_PLUGINS: "true"
+      DOCLING_SERVE_ALLOW_CUSTOM_LAYOUT_CONFIG: "true"
       DOCLING_SERVE_LOG_LEVEL: "${DOCLING_SERVE_LOG_LEVEL:-INFO}"
       GLMOCR_REMOTE_OCR_API_URL: http://vllm-glm-ocr:8000/v1/chat/completions
     depends_on:

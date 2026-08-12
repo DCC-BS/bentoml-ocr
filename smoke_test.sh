@@ -8,6 +8,19 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Load .env files if present
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  set -a
+  source "$SCRIPT_DIR/.env"
+  set +a
+fi
+if [ -f "$SCRIPT_DIR/.env.local" ]; then
+  set -a
+  source "$SCRIPT_DIR/.env.local"
+  set +a
+fi
+
 GLM_OCR_DIR="$(realpath "$SCRIPT_DIR/../docling-glm-ocr")"
 PP_DOC_LAYOUT_DIR="$(realpath "$SCRIPT_DIR/../docling-pp-doc-layout")"
 
@@ -22,12 +35,14 @@ uv pip install --no-cache-dir "transformers>=5.1.0"
 echo ""
 
 # ── 2) Resolve config ─────────────────────────────────────────────────────────
-export GLMOCR_REMOTE_OCR_API_URL="${GLMOCR_REMOTE_OCR_API_URL:-http://localhost:8001/v1/chat/completions}"
+export DOCLING_SERVE_URL="${DOCLING_SERVE_URL:-http://localhost:${DOCLING_HOST_PORT:-5001}}"
+export GLMOCR_REMOTE_OCR_API_URL="${GLMOCR_REMOTE_OCR_API_URL:-http://localhost:${VLLM_HOST_PORT:-8001}/v1/chat/completions}"
 export SMOKE_TEST_IMAGE="$SCRIPT_DIR/data/ocr.png"
 
 echo "==> Running SDK smoke tests ..."
-echo "    vLLM URL  : $GLMOCR_REMOTE_OCR_API_URL"
-echo "    Test image: $SMOKE_TEST_IMAGE"
+echo "    Docling URL: $DOCLING_SERVE_URL"
+echo "    vLLM URL   : $GLMOCR_REMOTE_OCR_API_URL"
+echo "    Test image : $SMOKE_TEST_IMAGE"
 echo ""
 
 # ── 3) Python smoke test ──────────────────────────────────────────────────────

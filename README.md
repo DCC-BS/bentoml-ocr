@@ -331,7 +331,7 @@ images in `data/` to validate conversion through both plugins.
 
 ```bash
 export DOCLING_SERVE_URL=http://localhost:5001
-make test-e2e
+make test
 ```
 
 Tests are skipped automatically when `DOCLING_SERVE_URL` is not set.

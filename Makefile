@@ -1,3 +1,18 @@
+ENV_FILES := $(wildcard .env .env.local)
+
+ifneq ($(ENV_FILES),)
+    include $(ENV_FILES)
+    export
+    # Strip optional quotes from exported variables loaded from env files
+    $(foreach v,$(shell grep -h -E '^[A-Za-z_][A-Za-z0-9_]*=' $(ENV_FILES) 2>/dev/null | cut -d= -f1),$(eval $(v) := $(patsubst "%",%,$(patsubst '%',%,$($(v))))))
+endif
+
+ENV_FILE_ARGS := $(foreach f,$(ENV_FILES),--env-file $(f))
+
+DOCLING_HOST_PORT ?= 5001
+DOCLING_SERVE_URL ?= http://localhost:$(DOCLING_HOST_PORT)
+export DOCLING_SERVE_URL
+
 .PHONY: install
 install: ## Install the virtual environment and install the pre-commit hooks
 	@echo "🚀 Creating virtual environment using uv"
@@ -13,14 +28,9 @@ check: ## Run code quality tools.
 	@uv run ruff check --fix
 
 .PHONY: test
-test: ## Run tests (skips e2e unless DOCLING_SERVE_URL is set)
+test: ## Run tests
 	@echo "🚀 Testing code: Running pytest"
 	@uv run python -m pytest
-
-.PHONY: test-e2e
-test-e2e: ## Run end-to-end tests (requires DOCLING_SERVE_URL)
-	@echo "🚀 Running e2e tests"
-	@uv run python -m pytest tests/e2e -m e2e -v
 
 .PHONY: docker-build
 docker-build: ## Build the patched docling-serve image locally
@@ -30,12 +40,13 @@ docker-build: ## Build the patched docling-serve image locally
 .PHONY: docker-up
 docker-up: ## Start the Docker Compose stack
 	@echo "🐳 Running docker compose"
-	@docker compose up -d
+	@docker compose $(ENV_FILE_ARGS) up -d
+	@echo "🌐 docling-serve is available at: $(DOCLING_SERVE_URL)"
 
 .PHONY: docker-down
 docker-down: ## Stop the Docker Compose stack
 	@echo "🐳 Stopping docker compose"
-	@docker compose down
+	@docker compose $(ENV_FILE_ARGS) down
 
 .PHONY: help
 help:
