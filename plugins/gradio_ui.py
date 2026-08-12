@@ -233,15 +233,15 @@ def auto_set_return_as_file(
 
 def change_ocr_lang(ocr_engine):
     if ocr_engine == "easyocr":
-        return gr.update(visible=True, value="en,fr,de,es")
+        return gr.update(visible=True, value="de,en,fr,es")
     elif ocr_engine == "tesseract_cli":
-        return gr.update(visible=True, value="eng,fra,deu,spa")
+        return gr.update(visible=True, value="deu,eng,fra,spa")
     elif ocr_engine == "tesseract":
-        return gr.update(visible=True, value="eng,fra,deu,spa")
+        return gr.update(visible=True, value="deu,eng,fra,spa")
     elif ocr_engine == "rapidocr":
-        return gr.update(visible=True, value="english,chinese")
+        return gr.update(visible=True, value="de,en,fr,es,ch")
     elif ocr_engine == "ocrmac":
-        return gr.update(visible=True, value="fr-FR,de-DE,es-ES,en-US")
+        return gr.update(visible=True, value="de-DE,en-US,fr-FR,es-ES")
 
     return gr.update(visible=False, value="")
 
@@ -367,6 +367,7 @@ def process_url(
     ocr_lang,
     pdf_backend,
     table_mode,
+    heading_hierarchy,
     abort_on_error,
     return_as_file,
     do_code_enrichment,
@@ -389,6 +390,7 @@ def process_url(
             "ocr_lang": _to_list_of_strings(ocr_lang),
             "pdf_backend": pdf_backend,
             "table_mode": table_mode,
+            "do_pdf_heading_hierarchy": heading_hierarchy,
             "abort_on_error": abort_on_error,
             "do_code_enrichment": do_code_enrichment,
             "do_formula_enrichment": do_formula_enrichment,
@@ -454,6 +456,7 @@ def process_file(
     ocr_lang,
     pdf_backend,
     table_mode,
+    heading_hierarchy,
     abort_on_error,
     return_as_file,
     do_code_enrichment,
@@ -482,6 +485,7 @@ def process_file(
             "ocr_lang": _to_list_of_strings(ocr_lang),
             "pdf_backend": pdf_backend,
             "table_mode": table_mode,
+            "do_pdf_heading_hierarchy": heading_hierarchy,
             "abort_on_error": abort_on_error,
             "return_as_file": return_as_file,
             "do_code_enrichment": do_code_enrichment,
@@ -738,7 +742,7 @@ with gr.Blocks(
             with gr.Column(scale=1, min_width=200):
                 ocr_lang = gr.Textbox(
                     label="OCR Language (beware of the format)",
-                    value="en,fr,de,es",
+                    value="de,en,fr,es",
                     visible=False,
                 )
             ocr_engine.change(change_ocr_lang, inputs=[ocr_engine], outputs=[ocr_lang])
@@ -754,6 +758,16 @@ with gr.Blocks(
                     [(v.value.capitalize(), v.value) for v in TableFormerMode],
                     label="Table Mode",
                     value=TableStructureOptions().mode.value,
+                )
+            with gr.Column(scale=2):
+                heading_hierarchy = gr.Checkbox(
+                    label="Infer heading levels",
+                    info=(
+                        "Assign section-header levels from the PDF bookmarks, "
+                        "numbering and font style instead of leaving every heading "
+                        "at level 1."
+                    ),
+                    value=False,
                 )
             with gr.Column(scale=1):
                 abort_on_error = gr.Checkbox(label="Abort on Error", value=False)
@@ -862,6 +876,7 @@ with gr.Blocks(
             ocr_lang,
             pdf_backend,
             table_mode,
+            heading_hierarchy,
             abort_on_error,
             return_as_file,
             do_code_enrichment,
@@ -951,6 +966,7 @@ with gr.Blocks(
             ocr_lang,
             pdf_backend,
             table_mode,
+            heading_hierarchy,
             abort_on_error,
             return_as_file,
             do_code_enrichment,

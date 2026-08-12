@@ -32,10 +32,12 @@ test: ## Run tests
 	@echo "🚀 Testing code: Running pytest"
 	@uv run python -m pytest
 
+DOCLING_IMAGE ?= ghcr.io/dcc-bs/dcc-docling-serve:latest
+
 .PHONY: docker-build
 docker-build: ## Build the patched docling-serve image locally
-	@echo "🐳 Building docling-serve image"
-	@docker build --no-cache  -t docling-serve-plugins:latest -f plugins/Dockerfile.docling-serve plugins/
+	@echo "🐳 Building docling-serve image ($(DOCLING_IMAGE))"
+	@docker build --pull --no-cache -t $(DOCLING_IMAGE) -f plugins/Dockerfile.docling-serve plugins/
 
 .PHONY: docker-up
 docker-up: ## Start the Docker Compose stack

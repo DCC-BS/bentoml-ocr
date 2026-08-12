@@ -43,7 +43,11 @@ services:
 
   # ── Docling API server with UI ────────────────────────────────────────
   docling-serve:
-    image: ghcr.io/dcc-bs/dcc-docling-serve:${DOCLING_SERVE_TAG:-latest}
+    build:
+      context: plugins
+      dockerfile: Dockerfile.docling-serve
+      pull: true
+    image: ${DOCLING_IMAGE:-ghcr.io/dcc-bs/dcc-docling-serve:latest}
     env_file:
       - path: .env
         required: false
