@@ -1,5 +1,7 @@
 import base64
+import functools
 import importlib.metadata
+import inspect
 import itertools
 import json
 import logging
@@ -100,6 +102,61 @@ docling-img {
 
 docling-img::part(page) {
     box-shadow: 0 0.5rem 1rem 0 rgba(0, 0, 0, 0.2);
+}
+
+#dclroot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.dcl-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.9rem;
+    font-size: 0.8rem;
+}
+
+.dcl-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
+.dcl-swatch {
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 2px;
+    border: 1px solid rgba(0, 0, 0, 0.25);
+}
+
+.dcl-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-right: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.dcl-notice,
+.dcl-status:not(:empty) {
+    padding: 0.75rem 1rem;
+    border: 1px solid rgba(128, 128, 128, 0.4);
+    border-radius: 4px;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.dcl-notice code,
+.dcl-status code {
+    font-size: 0.85em;
+}
+
+.dcl-boot {
+    display: none;
 }
 """
 
@@ -359,6 +416,7 @@ def process_url(
     input_sources,
     to_formats,
     image_export_mode,
+    include_page_images,
     pipeline,
     layout_engine,
     ocr,
@@ -383,6 +441,7 @@ def process_url(
         "options": {
             "to_formats": to_formats,
             "image_export_mode": image_export_mode,
+            "include_page_images": include_page_images,
             "pipeline": pipeline,
             "ocr": ocr,
             "force_ocr": force_ocr,
@@ -448,6 +507,7 @@ def process_file(
     files,
     to_formats,
     image_export_mode,
+    include_page_images,
     pipeline,
     layout_engine,
     ocr,
@@ -478,6 +538,7 @@ def process_file(
         "options": {
             "to_formats": to_formats,
             "image_export_mode": image_export_mode,
+            "include_page_images": include_page_images,
             "pipeline": pipeline,
             "ocr": ocr,
             "force_ocr": force_ocr,
@@ -525,6 +586,171 @@ def process_file(
     return task_id_rendered
 
 
+#############################
+# Docling-Rendered bboxes   #
+#############################
+
+# Stroke/fill colour per DocItemLabel, used for the bounding boxes drawn on top
+# of the page images in the "Docling-Rendered" tab.
+BBOX_COLORS = {
+    "title": "#d7263d",
+    "section_header": "#f46036",
+    "text": "#2e86ab",
+    "paragraph": "#2e86ab",
+    "list_item": "#6a4c93",
+    "table": "#1b998b",
+    "picture": "#c5299b",
+    "chart": "#06d6a0",
+    "caption": "#ff9f1c",
+    "formula": "#7d5ba6",
+    "code": "#3f8efc",
+    "page_header": "#8d99ae",
+    "page_footer": "#8d99ae",
+    "footnote": "#a68a64",
+    "document_index": "#0f7173",
+    "reference": "#b56576",
+    "checkbox_selected": "#4c956c",
+    "checkbox_unselected": "#4c956c",
+    "form": "#8338ec",
+    "key_value_region": "#fb5607",
+}
+BBOX_DEFAULT_COLOR = "#6c757d"
+
+# Item collections of a DoclingDocument whose entries carry a label and prov.
+_LABELLED_COLLECTIONS = (
+    "texts",
+    "tables",
+    "pictures",
+    "form_items",
+    "key_value_items",
+)
+
+# Runs once the docling web components are registered: parses the embedded
+# document, colours every bounding box by its label and wires the toggle.
+_BOOTSTRAP_JS = """
+(function () {
+  var root = document.getElementById('dclroot');
+  if (!root) return;
+  var img = root.querySelector('docling-img');
+  var raw = root.querySelector('script[type="application/json"]');
+  var status = root.querySelector('.dcl-status');
+  var doc;
+  try {
+    doc = JSON.parse(raw.textContent);
+  } catch (err) {
+    status.textContent = 'Could not parse the Docling JSON: ' + err.message;
+    return;
+  }
+
+  var colors = __COLORS__;
+  var fallback = '__DEFAULT_COLOR__';
+  var visible = true;
+
+  function itemStyle(page, item) {
+    if (!visible) return 'visibility: hidden';
+    var color = (item && colors[item.label]) || fallback;
+    return 'stroke: ' + color + '; fill: ' + color +
+           '; stroke-width: 1.5px; stroke-dasharray: none';
+  }
+
+  function applyStyle() {
+    // A fresh function reference is what makes Lit re-render the boxes.
+    img.itemStyle = function (page, item) { return itemStyle(page, item); };
+  }
+
+  var toggle = root.querySelector('.dcl-toggle');
+  if (toggle) {
+    toggle.addEventListener('change', function () {
+      visible = toggle.checked;
+      applyStyle();
+    });
+  }
+
+  var timeout = setTimeout(function () {
+    status.innerHTML = 'The Docling web components could not be loaded from ' +
+      '<code>__JS_URL__</code>. Check that this page can reach it.';
+  }, 15000);
+
+  customElements.whenDefined('docling-img').then(function () {
+    clearTimeout(timeout);
+    status.textContent = '';
+    img.itemPart = function (page, item) {
+      return item && item.label ? String(item.label) : '';
+    };
+    applyStyle();
+    img.src = doc;
+  });
+})();
+"""
+
+
+def document_bbox_labels(document: dict) -> list[str]:
+    """Labels of every item that carries provenance, in first-seen order."""
+    labels: list[str] = []
+    for collection in _LABELLED_COLLECTIONS:
+        for item in document.get(collection) or []:
+            if not isinstance(item, dict) or not item.get("prov"):
+                continue
+            label = item.get("label")
+            if label and label not in labels:
+                labels.append(str(label))
+    return labels
+
+
+def document_has_page_images(document: dict) -> bool:
+    pages = document.get("pages") or {}
+    if not isinstance(pages, dict):
+        return False
+    return any(isinstance(page, dict) and page.get("image") for page in pages.values())
+
+
+def build_json_rendered(document: Optional[dict], json_text: str) -> str:
+    """HTML for the Docling-Rendered tab: page images plus labelled bboxes."""
+    if not isinstance(document, dict) or not document:
+        return (
+            '<div class="dcl-notice">No Docling JSON in the response. '
+            "Select <b>Docling (JSON)</b> under <b>To Formats</b> to use this view."
+            "</div>"
+        )
+    if not document_has_page_images(document):
+        return (
+            '<div class="dcl-notice">This document carries no page images, so there '
+            "is nothing to draw the bounding boxes on. Enable <b>Include page "
+            "images</b> in <b>Options</b> and convert again.</div>"
+        )
+
+    labels = document_bbox_labels(document)
+    legend = "".join(
+        '<span class="dcl-legend-item">'
+        f'<span class="dcl-swatch" style="background: {BBOX_COLORS.get(label, BBOX_DEFAULT_COLOR)}"></span>'
+        f"{label}</span>"
+        for label in labels
+    )
+    bootstrap = (
+        _BOOTSTRAP_JS.replace("__COLORS__", json.dumps(BBOX_COLORS))
+        .replace("__DEFAULT_COLOR__", BBOX_DEFAULT_COLOR)
+        .replace("__JS_URL__", js_components_url)
+    )
+    # Escaped so document text can never terminate the <script> element early.
+    embedded_json = json_text.replace("</", "<\\/")
+
+    return f"""
+        <div id="dclroot">
+          <div class="dcl-legend">
+            <label class="dcl-toggle-label">
+              <input class="dcl-toggle" type="checkbox" checked /> Bounding boxes
+            </label>
+            {legend}
+          </div>
+          <div class="dcl-status">Loading the Docling viewer...</div>
+          <docling-img pagenumbers><docling-tooltip></docling-tooltip></docling-img>
+          <script type="application/json">{embedded_json}</script>
+          <script id="dclboot" type="text/plain">{bootstrap}</script>
+        </div>
+        <img class="dcl-boot" alt="" src="data:," onerror="var b=document.getElementById('dclboot');var s=document.createElement('script');s.textContent=b.textContent;document.body.appendChild(s);s.remove();this.remove();" />
+        """
+
+
 def response_to_output(response, return_as_file):
     markdown_content = ""
     json_content = ""
@@ -548,15 +774,9 @@ def response_to_output(response, return_as_file):
     else:
         full_content = response.json()
         markdown_content = full_content.get("document").get("md_content")
-        json_content = json.dumps(
-            full_content.get("document").get("json_content"), indent=2
-        )
-        # Embed document JSON and trigger load at client via an image.
-        json_rendered_content = f"""
-            <docling-img id="dclimg" pagenumbers><docling-tooltip></docling-tooltip></docling-img>
-            <script id="dcljson" type="application/json" onload="document.getElementById('dclimg').src = JSON.parse(document.getElementById('dcljson').textContent);">{json_content}</script>
-            <img src onerror="document.getElementById('dclimg').src = JSON.parse(document.getElementById('dcljson').textContent);" />
-            """
+        document_json = full_content.get("document").get("json_content")
+        json_content = json.dumps(document_json, indent=2)
+        json_rendered_content = build_json_rendered(document_json, json_content)
         html_content = full_content.get("document").get("html_content")
         text_content = full_content.get("document").get("text_content")
         doctags_content = full_content.get("document").get("doctags_content")
@@ -701,6 +921,15 @@ with gr.Blocks(
                     ],
                     label="Image Export Mode",
                     value="embedded",
+                )
+                include_page_images = gr.Checkbox(
+                    label="Include page images",
+                    info=(
+                        "Embed a full-page image per page. Required by the "
+                        "Docling-Rendered tab, which draws the bounding boxes on "
+                        "top of them. Noticeably increases the response size."
+                    ),
+                    value=False,
                 )
 
         with gr.Row():
@@ -868,6 +1097,7 @@ with gr.Blocks(
             url_input,
             to_formats,
             image_export_mode,
+            include_page_images,
             pipeline,
             layout_engine,
             ocr,
@@ -958,6 +1188,7 @@ with gr.Blocks(
             file_input,
             to_formats,
             image_export_mode,
+            include_page_images,
             pipeline,
             layout_engine,
             ocr,
@@ -1017,3 +1248,48 @@ with gr.Blocks(
     ).then(set_task_id_visibility, inputs=[false_bool], outputs=[task_id_output]).then(
         clear_file_input, inputs=None, outputs=[file_input]
     )
+
+
+####################################
+# Gradio 6 head/css/theme fallback #
+####################################
+
+
+def _patch_mount_gradio_app() -> None:
+    """Pass ``head``/``css``/``theme`` on to ``mount_gradio_app``.
+
+    Gradio 6 removed those arguments from ``gr.Blocks.__init__`` (they are
+    swallowed by ``**kwargs``) and moved them to ``launch()`` and
+    ``mount_gradio_app()``, which overwrites them with empty defaults.
+    docling-serve mounts this UI without passing them, so without this wrapper
+    the docling web components are never loaded and the custom CSS is dropped.
+    """
+    original = getattr(gr, "mount_gradio_app", None)
+    if original is None or getattr(original, "_docling_serve_patched", False):
+        return
+
+    try:
+        supported = set(inspect.signature(original).parameters)
+    except (TypeError, ValueError):
+        return
+
+    extras = {
+        name: value
+        for name, value in (("head", head), ("css", css), ("theme", theme))
+        if name in supported
+    }
+    if not extras:
+        return
+
+    @functools.wraps(original)
+    def mount_gradio_app(app, blocks, *args, **kwargs):
+        if blocks is ui:
+            for name, value in extras.items():
+                kwargs.setdefault(name, value)
+        return original(app, blocks, *args, **kwargs)
+
+    mount_gradio_app._docling_serve_patched = True
+    gr.mount_gradio_app = mount_gradio_app
+
+
+_patch_mount_gradio_app()
